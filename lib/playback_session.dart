@@ -300,6 +300,7 @@ class PlaybackSession extends ChangeNotifier {
       _preloader.clear();
       _dropStandby();
       _playIntent = false;
+      _resumeIntent = false;
       endBoost();
       unawaited(player.pause());
     }
@@ -414,6 +415,7 @@ class PlaybackSession extends ChangeNotifier {
 
   void _stop() {
     _playIntent = false;
+    _resumeIntent = false;
     endBoost();
     unawaited(player.pause());
     unawaited(saveProgress());
