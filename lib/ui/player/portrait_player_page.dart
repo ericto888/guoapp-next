@@ -257,9 +257,11 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       if (_scrolling) return;
       final target = _session.index + (event.scrollDelta.dy > 0 ? 1 : -1);
       if (target < 0) return _say('已经是第一集');
-      if (target >= _session.detail.episodes.length) {
-        return _say('已经是最后一集');
-      }
+      final max =
+          _session.detail.episodes.length +
+          (_session.detail.nextSeason != null ? 1 : 0) -
+          1;
+      if (target > max) return _say('已经是最后一集');
       setState(() => _scrolling = true);
       unawaited(
         _pages.animateToPage(
