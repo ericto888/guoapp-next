@@ -2,6 +2,18 @@ name: Build app packages
 
 on:
   workflow_dispatch:
+    inputs:
+      build_target:
+        description: 构建目标
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - ios
+          - android
+          - windows
+          - macos
 
 permissions:
   contents: read
@@ -74,14 +86,12 @@ jobs:
             exit 1
           fi
           tag="app-v${version//+/-}"
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null || gh release view "$tag" >/dev/null 2>&1; then
-            echo "版本 $version（$tag）已发布过，请先提升 pubspec.yaml 的 version。" >&2
-            exit 1
-          fi
+          # 支持同一版本分平台分批构建，后续构建会把产物追加到同一个 Release。
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   android:
+    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'android' }}
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -155,6 +165,7 @@ jobs:
           retention-days: 14
 
   windows:
+    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'windows' }}
     needs: prepare
     runs-on: windows-latest
     timeout-minutes: 45
@@ -186,6 +197,7 @@ jobs:
           retention-days: 14
 
   ios:
+    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'ios' }}
     needs: prepare
     runs-on: macos-latest
     timeout-minutes: 60
@@ -219,6 +231,7 @@ jobs:
           retention-days: 14
 
   macos:
+    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'macos' }}
     needs: prepare
     runs-on: macos-latest
     timeout-minutes: 60
@@ -253,6 +266,13 @@ jobs:
 
   release:
     needs: [checks, prepare, android, windows, ios, macos]
+    if: ${{ always() && needs.checks.result == 'success' && needs.prepare.result == 'success' && (
+      (inputs.build_target == 'all' && needs.android.result == 'success' && needs.windows.result == 'success' && needs.ios.result == 'success' && needs.macos.result == 'success') ||
+      (inputs.build_target == 'ios' && needs.ios.result == 'success') ||
+      (inputs.build_target == 'android' && needs.android.result == 'success') ||
+      (inputs.build_target == 'windows' && needs.windows.result == 'success') ||
+      (inputs.build_target == 'macos' && needs.macos.result == 'success')
+    ) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -269,28 +289,44 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           TAG: ${{ needs.prepare.outputs.tag }}
           SIGNING_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
+          BUILD_TARGET: ${{ inputs.build_target }}
         run: |
           set -euo pipefail
-          cat > notes.md <<EOF
-          版本 ${VERSION}。安装包内置红果站源，其余站源在 设置 › 站源 › 模块管理 的模块商店安装。
-
+          {
+            printf '版本 %s。安装包内置红果站源，其余站源在 设置 › 站源 › 模块管理 的模块商店安装。\\n\\n' "$VERSION"
+            if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "android" ]; then
+              cat <<'EOF'
           Android：
           - *-arm64-v8a.apk：适用于较新的安卓设备
           - *-armeabi-v7a.apk：适用于较老的安卓设备，电视推荐使用此版本
           - *-x86_64.apk：适用于模拟器
 
+          EOF
+              printf 'Android 签名证书 SHA-256：%s\\n\\n' "$SIGNING_CERT_SHA256"
+            fi
+            if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "ios" ]; then
+              cat <<'EOF'
           iOS：
           - *-ios-unsigned.ipa：未签名 IPA，可用相关工具安装
 
+          EOF
+            fi
+            if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "windows" ]; then
+              cat <<'EOF'
           Windows：
           - *-windows-x64-setup.exe：安装包，默认安装到当前用户，无需管理员权限；安装时可改为所有用户
           - *-windows-x64.zip：便携版，解压后运行 guoapp.exe；设置、记录、海报缓存和默认下载都保存在程序旁的 userdata 目录，升级时把旧版的 userdata 目录复制过来即可
 
+          EOF
+            fi
+            if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "macos" ]; then
+              cat <<'EOF'
           macOS：
           - *-macos-universal.dmg：适用于 macOS 12 及以上的 Apple 芯片和 Intel 电脑，打开后拖入 Applications；未经公证，首次打开前在终端执行 xattr -dr com.apple.quarantine /Applications/小果影视.app
 
-          Android 签名证书 SHA-256：${SIGNING_CERT_SHA256}
           EOF
+            fi
+          } > notes.md
           changes="$(awk -v heading="## ${VERSION}" '
             $0 == heading { found = 1; next }
             found && /^## / { exit }
@@ -302,7 +338,12 @@ jobs:
             { printf '更新内容：\n\n%s\n\n' "$changes"; cat notes.md; } > notes.tmp
             mv notes.tmp notes.md
           fi
-          gh release create "$TAG" release/* --target "$GITHUB_SHA" --title "小果影视 ${VERSION}" --notes-file notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+            gh release edit "$TAG" --title "小果影视 ${VERSION}" --notes-file notes.md
+          else
+            gh release create "$TAG" release/* --target "$GITHUB_SHA" --title "小果影视 ${VERSION}" --notes-file notes.md
+          fi
       - name: 推送到 Telegram 频道
         continue-on-error: true
         env:
