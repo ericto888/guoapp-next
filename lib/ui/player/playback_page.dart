@@ -260,7 +260,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
         LandscapePlayerPage(
           store: widget.store,
           handle: widget.handle,
-          followSensor: !portraitStyle,
+          followSensor: true,
           onMiniWindow: mini,
         ),
       FormFactor.phone => PortraitPlayerPage(
