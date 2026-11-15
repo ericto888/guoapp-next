@@ -834,9 +834,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 fontWeight: FontWeight.w800,
               ),
             ),
-            if (season.episodes > 0)
+            if (season.drama.episodes > 0)
               Text(
-                '共 ${season.episodes} 集',
+                '共 ${season.drama.episodes} 集',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: .72),
                   fontSize: 13,
