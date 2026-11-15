@@ -1026,6 +1026,7 @@ class LocalStore extends ChangeNotifier {
       'themeMode': themeMode,
       'followSystemColor': followSystemColor,
       'themeColor': themeColor.name,
+      'showModulesTab': showModulesTab,
       'pureBlack': pureBlack,
       'blurCoversButton': blurCoversButton,
       'blurCoversLaunch': blurCoversLaunch,
