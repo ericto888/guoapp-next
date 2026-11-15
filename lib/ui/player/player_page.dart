@@ -75,9 +75,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    _playback.setForeground(playerVisible(state));
-  }
+  void didChangeAppLifecycleState(AppLifecycleState state) =>
+      _playback.onLifecycleEvent(state, source: 'player_page');
 
   bool get _canDownload =>
       AppScope.of(context).repository.supportsDownloads &&
