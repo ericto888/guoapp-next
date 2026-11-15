@@ -87,12 +87,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - &checkout-hongguo
-        uses: actions/checkout@v4
-        with:
-          repository: guoapp-modules/hongguo
-          ssh-key: ${{ secrets.HONGGUO_DEPLOY_KEY }}
-          path: bundled-modules/hongguo
       - &setup-python
         uses: actions/setup-python@v5
         with:
@@ -166,7 +160,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - *checkout-hongguo
       - *setup-go
       - *setup-python
       - *setup-flutter
@@ -198,7 +191,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - *checkout-hongguo
       - *setup-python
       - *setup-go
       - *setup-flutter
@@ -232,7 +224,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - *checkout-hongguo
       - *setup-python
       - *setup-go
       - *setup-flutter
