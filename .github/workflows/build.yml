@@ -293,7 +293,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            printf '版本 %s。安装包内置红果站源，其余站源在 设置 › 站源 › 模块管理 的模块商店安装。\\n\\n' "$VERSION"
+            printf '版本 %s。安装包内置红果站源，其余站源在 设置 › 站源 › 模块管理 的模块商店安装。\n\n' "$VERSION"
             if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "android" ]; then
               cat <<'EOF'
           Android：
@@ -302,7 +302,7 @@ jobs:
           - *-x86_64.apk：适用于模拟器
 
           EOF
-              printf 'Android 签名证书 SHA-256：%s\\n\\n' "$SIGNING_CERT_SHA256"
+              printf 'Android 签名证书 SHA-256：%s\n\n' "$SIGNING_CERT_SHA256"
             fi
             if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "ios" ]; then
               cat <<'EOF'
