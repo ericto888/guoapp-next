@@ -7,10 +7,10 @@ on:
         description: 构建目标
         required: true
         type: choice
-        default: all
+        default: ios
         options:
-          - all
           - ios
+          - all
           - android
           - windows
           - macos
@@ -97,10 +97,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - &setup-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - *setup-python
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
