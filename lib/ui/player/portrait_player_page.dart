@@ -140,6 +140,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     _bind();
     if (_holding && _session.index != _heldIndex) _pressEnd();
     if (!_scrolling &&
+        !_session.advancingSeason &&
         _pages.hasClients &&
         _pages.page?.round() != _session.index) {
       _pages.jumpToPage(_session.index);
@@ -239,11 +240,12 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     } else if (notification is ScrollEndNotification) {
       final page = (metrics.pixels / metrics.viewportDimension).round();
       if (_scrolling) setState(() => _scrolling = false);
-      if (page != _session.index &&
-          page >= 0 &&
-          page < _session.detail.episodes.length) {
+      final count = _session.detail.episodes.length;
+      if (page != _session.index && page >= 0 && page < count) {
         unawaited(_session.play(page));
         setState(_wake);
+      } else if (page >= count && _session.detail.nextSeason != null) {
+        unawaited(_session.playNextSeason());
       }
     }
     return false;
@@ -449,7 +451,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                     physics: _pinching
                         ? const NeverScrollableScrollPhysics()
                         : const _PagePhysics(),
-                    itemCount: _session.detail.episodes.length,
+                    itemCount: _session.detail.episodes.length +
+                        (_session.detail.nextSeason != null ? 1 : 0),
                     itemBuilder: _page,
                   ),
                 ),
@@ -477,6 +480,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   Widget _page(BuildContext context, int index) {
     final session = _session;
+    if (index >= session.detail.episodes.length) {
+      return _nextSeasonPage(context);
+    }
     final current = index == session.index;
     final player = current
         ? session.player
@@ -805,6 +811,53 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             ),
           ),
       ],
+    );
+  }
+
+  /// 最后一集之后的一页：继续上滑衔接下一季。
+  Widget _nextSeasonPage(BuildContext context) {
+    final season = _session.detail.nextSeason;
+    if (season == null) return const SizedBox.shrink();
+    final advancing = _session.advancingSeason;
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 12,
+          children: [
+            Text(
+              season.label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (season.episodes > 0)
+              Text(
+                '共 ${season.episodes} 集',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .72),
+                  fontSize: 13,
+                ),
+              ),
+            if (advancing) const CircularProgressIndicator(),
+            Text(
+              advancing ? '正在加载${season.label}' : '继续上滑播放${season.label}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .64),
+                fontSize: 13,
+              ),
+            ),
+            if (!advancing)
+              FilledButton(
+                onPressed: () => unawaited(_session.playNextSeason()),
+                child: Text('播放${season.label}'),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
