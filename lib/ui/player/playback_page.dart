@@ -277,11 +277,6 @@ class _PlaybackPageState extends State<PlaybackPage> {
       FormFactor.phone => PortraitPlayerPage(
         store: widget.store,
         handle: widget.handle,
-        onFullscreen: _wideVideo
-            ? () => unawaited(
-                AppDevice.setPlayerOrientation(PlayerOrientation.landscape),
-              )
-            : null,
         onMiniWindow: mini,
       ),
       FormFactor.television => TelevisionPlayerPage(handle: widget.handle),
@@ -309,7 +304,6 @@ class _PlaybackPageState extends State<PlaybackPage> {
         : PortraitPlayerPage(
             store: widget.store,
             handle: widget.handle,
-            onFullscreen: _wideVideo ? () => _padFullscreen.value = true : null,
             onMiniWindow: mini,
           );
   }
