@@ -222,6 +222,10 @@ class PlaybackSession extends ChangeNotifier {
   bool get loginRequired => _loginRequired;
   String? get saveWarning => _saveWarning;
   bool get ready => !_loading && _error == null;
+  bool get advancingSeason => _advancingSeason;
+
+  /// Exposes the same explicit next-season action used by the portrait pager.
+  Future<void> playNextSeason() => _playNextSeason();
 
   bool get stalled => _stalled;
 
