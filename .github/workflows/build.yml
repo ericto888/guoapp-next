@@ -293,7 +293,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            printf '版本 %s。安装包内置红果站源，其余站源在 设置 › 站源 › 模块管理 的模块商店安装。\n\n' "$VERSION"
+            printf '版本 %s，本次构建平台：%s。安装包内置红果站源，其余站源在 设置 › 站源 › 模块管理 的模块商店安装。此前已上传的其他平台附件会保留在本 Release 中。\n\n' "$VERSION" "$BUILD_TARGET"
             if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "android" ]; then
               cat <<'EOF'
           Android：
