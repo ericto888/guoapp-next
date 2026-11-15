@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../../hongguo_series.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../../playback_preferences.dart';
@@ -650,6 +651,14 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           ),
         ),
         Positioned(
+          key: const ValueKey('season-info'),
+          left: 18,
+          right: 18,
+          bottom: bottom + 100,
+          height: 62,
+          child: _chrome(_seasonInfo()),
+        ),
+        Positioned(
           key: const ValueKey('progress'),
           left: 16,
           right: 16,
@@ -796,6 +805,52 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             ),
           ),
       ],
+    );
+  }
+
+  Widget _seasonInfo() {
+    final detail = _session.detail;
+    final drama = detail.drama;
+    final season = detail.seasons
+        .where((item) => item.drama.id == drama.id)
+        .firstOrNull;
+    final series = hongguoSeriesInfo(drama);
+    final seasonLabel = season?.label ??
+        (series == null ? '' : '第 ${series.season} ${series.unit}');
+    final title = seasonLabel.isEmpty
+        ? drama.title
+        : '$seasonLabel · ${drama.title}';
+    final description = drama.description.trim();
+    return IgnorePointer(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              shadows: [Shadow(color: Color(0x88000000), blurRadius: 3)],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            description.isEmpty ? '暂无简介' : description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .82),
+              fontSize: 12,
+              height: 1.35,
+              shadows: const [Shadow(color: Color(0x88000000), blurRadius: 3)],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
