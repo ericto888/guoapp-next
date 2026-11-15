@@ -48,6 +48,9 @@ class _PlaybackPageState extends State<PlaybackPage> {
   void initState() {
     super.initState();
     _session.addListener(_changed);
+    if (_wideVideo && widget.store.playbackPreferences.portraitStyleForWide) {
+      unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
+    }
     _padFullscreen.addListener(_padFullscreenChanged);
     _pip.addListener(_pipChanged);
     _pip.onAction = _action;
@@ -66,6 +69,9 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _pageScope.dispose();
     if (_padFullscreen.value) _applyPadFullscreen(false);
     _padFullscreen.dispose();
+    if (widget.store.playbackPreferences.portraitStyleForWide) {
+      unawaited(AppDevice.releaseOrientation());
+    }
     unawaited(AppDevice.resetBrightness());
     widget.handle.dispose();
     super.dispose();
@@ -75,7 +81,12 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _bind();
     _sync();
     final wide = _measure();
-    if (wide != _wideVideo) setState(() => _wideVideo = wide);
+    if (wide != _wideVideo) {
+      setState(() => _wideVideo = wide);
+      if (wide && widget.store.playbackPreferences.portraitStyleForWide) {
+        unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
+      }
+    }
   }
 
   void _bind() {
