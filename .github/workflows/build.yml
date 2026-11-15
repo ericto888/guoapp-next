@@ -2,18 +2,6 @@ name: Build app packages
 
 on:
   workflow_dispatch:
-    inputs:
-      build_target:
-        description: 构建目标
-        required: true
-        type: choice
-        default: ios
-        options:
-          - ios
-          - all
-          - android
-          - windows
-          - macos
 
 permissions:
   contents: read
@@ -38,14 +26,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - uses: actions/setup-go@v5
+      - &setup-go
+        uses: actions/setup-go@v5
         with:
           go-version-file: native/go.mod
           cache-dependency-path: native/go.sum
-      - uses: subosito/flutter-action@v2
+      - &setup-flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.9'
           channel: stable
@@ -87,150 +74,23 @@ jobs:
             exit 1
           fi
           tag="app-v${version//+/-}"
-          # 支持同一版本分平台分批构建，后续构建会把产物追加到同一个 Release。
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null || gh release view "$tag" >/dev/null 2>&1; then
+            echo "版本 $version（$tag）已发布过，请先提升 pubspec.yaml 的 version。" >&2
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-  android:
-    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'android' }}
-    needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: native/go.mod
-          cache-dependency-path: native/go.sum
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.9'
-          channel: stable
-          cache: true
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platforms;android-36"
-          accept-android-sdk-licenses: true
-      - run: sdkmanager 'ndk;28.2.13676358'
-      - name: Configure Android signing
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
-        run: |
-          set -euo pipefail
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "未配置签名 Secrets，拒绝发布 debug 签名的 APK。" >&2
-            exit 1
-          fi
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/release.jks"
-          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-      - run: python scripts/build_android.py
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-      - name: 校验 APK 签名证书
-        shell: bash
-        env:
-          CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
-          CERT_VARIABLE: SIGNING_CERT_SHA256
-        run: |
-          set -euo pipefail
-          expected=$(printf '%s' "$CERT_SHA256" | tr -d ': ' | tr '[:upper:]' '[:lower:]')
-          if [ -z "$expected" ]; then
-            echo "未设置仓库变量 $CERT_VARIABLE，无法确认发布证书。" >&2
-            exit 1
-          fi
-          apksigner=$(find "${ANDROID_HOME}/build-tools" -name apksigner -type f 2>/dev/null | sort | tail -n1 || true)
-          if [ -z "$apksigner" ]; then
-            sdkmanager 'build-tools;35.0.0' >/dev/null
-            apksigner=$(find "${ANDROID_HOME}/build-tools" -name apksigner -type f | sort | tail -n1)
-          fi
-          echo "apksigner：$apksigner"
-          "$apksigner" --version || true
-          for apk in dist/android/*.apk; do
-            echo "== $(basename "$apk")"
-            output=$("$apksigner" verify --print-certs "$apk" 2>&1 || true)
-            printf '%s\n' "$output"
-            if ! printf '%s' "$output" | tr -d ':' | tr '[:upper:]' '[:lower:]' | grep "$expected" >/dev/null; then
-              echo "签名证书与发布证书不一致，已终止。" >&2
-              exit 1
-            fi
-          done
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android
-          path: dist/android/*
-          if-no-files-found: error
-          retention-days: 14
-
-  windows:
-    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'windows' }}
-    needs: prepare
-    runs-on: windows-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: native/go.mod
-          cache-dependency-path: native/go.sum
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.9'
-          channel: stable
-          cache: true
-      - name: Set up MinGW-w64
-        shell: pwsh
-        run: |
-          choco install mingw --no-progress -y
-          $exe = Get-ChildItem -Path 'C:\ProgramData\mingw64', 'C:\ProgramData\chocolatey\lib\mingw' `
-                   -Recurse -Include 'x86_64-w64-mingw32-gcc.exe', 'gcc.exe' -ErrorAction SilentlyContinue |
-                 Select-Object -First 1 -ExpandProperty FullName
-          if (-not $exe) { $exe = (Get-Command x86_64-w64-mingw32-gcc -ErrorAction SilentlyContinue).Source }
-          if (-not $exe) { throw 'MinGW-w64 安装失败，找不到 gcc' }
-          Split-Path $exe | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          & $exe --version | Select-Object -First 1
-      - name: Set up Inno Setup
-        shell: pwsh
-        run: choco upgrade innosetup --no-progress -y
-      - run: python scripts/build_windows.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          path: dist/windows/*
-          if-no-files-found: error
-          retention-days: 14
-
   ios:
-    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'ios' }}
     needs: prepare
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: native/go.mod
-          cache-dependency-path: native/go.sum
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.9'
-          channel: stable
-          cache: true
+      - *checkout-hongguo
+      - *setup-python
+      - *setup-go
+      - *setup-flutter
       - name: Check Xcode and CocoaPods
         shell: bash
         run: |
@@ -255,58 +115,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  macos:
-    if: ${{ inputs.build_target == 'all' || inputs.build_target == 'macos' }}
-    needs: prepare
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: native/go.mod
-          cache-dependency-path: native/go.sum
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.9'
-          channel: stable
-          cache: true
-      - name: Check Xcode and CocoaPods
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcode-select -p
-          xcodebuild -version
-          xcrun --sdk macosx --show-sdk-path
-          if ! command -v pod >/dev/null 2>&1; then
-            brew install cocoapods
-          fi
-          pod --version
-          python -m pip install dmgbuild Pillow
-          go version
-          flutter --version
-          flutter precache --macos
-      - name: Build macOS packages
-        run: python scripts/build_macos.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          path: dist/macos/*
-          if-no-files-found: error
-          retention-days: 14
-
   release:
-    needs: [checks, prepare, android, windows, ios, macos]
-    if: ${{ always() && needs.checks.result == 'success' && needs.prepare.result == 'success' && (
-      (inputs.build_target == 'all' && needs.android.result == 'success' && needs.windows.result == 'success' && needs.ios.result == 'success' && needs.macos.result == 'success') ||
-      (inputs.build_target == 'ios' && needs.ios.result == 'success') ||
-      (inputs.build_target == 'android' && needs.android.result == 'success') ||
-      (inputs.build_target == 'windows' && needs.windows.result == 'success') ||
-      (inputs.build_target == 'macos' && needs.macos.result == 'success')
-    ) }}
+    needs: [checks, prepare, ios]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -322,45 +132,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.prepare.outputs.version }}
           TAG: ${{ needs.prepare.outputs.tag }}
-          SIGNING_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
-          BUILD_TARGET: ${{ inputs.build_target }}
         run: |
           set -euo pipefail
-          {
-            printf '版本 %s，本次构建平台：%s。安装包内置红果站源，其余站源在 设置 › 站源 › 模块管理 的模块商店安装。此前已上传的其他平台附件会保留在本 Release 中。\n\n' "$VERSION" "$BUILD_TARGET"
-            if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "android" ]; then
-              cat <<'EOF'
-          Android：
-          - *-arm64-v8a.apk：适用于较新的安卓设备
-          - *-armeabi-v7a.apk：适用于较老的安卓设备，电视推荐使用此版本
-          - *-x86_64.apk：适用于模拟器
-
+          cat > notes.md <<EOF
+          版本 ${VERSION}。iOS 未签名 IPA，可用相关工具安装。
           EOF
-              printf 'Android 签名证书 SHA-256：%s\n\n' "$SIGNING_CERT_SHA256"
-            fi
-            if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "ios" ]; then
-              cat <<'EOF'
-          iOS：
-          - *-ios-unsigned.ipa：未签名 IPA，可用相关工具安装
-
-          EOF
-            fi
-            if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "windows" ]; then
-              cat <<'EOF'
-          Windows：
-          - *-windows-x64-setup.exe：安装包，默认安装到当前用户，无需管理员权限；安装时可改为所有用户
-          - *-windows-x64.zip：便携版，解压后运行 guoapp.exe；设置、记录、海报缓存和默认下载都保存在程序旁的 userdata 目录，升级时把旧版的 userdata 目录复制过来即可
-
-          EOF
-            fi
-            if [ "$BUILD_TARGET" = "all" ] || [ "$BUILD_TARGET" = "macos" ]; then
-              cat <<'EOF'
-          macOS：
-          - *-macos-universal.dmg：适用于 macOS 12 及以上的 Apple 芯片和 Intel 电脑，打开后拖入 Applications；未经公证，首次打开前在终端执行 xattr -dr com.apple.quarantine /Applications/小果影视.app
-
-          EOF
-            fi
-          } > notes.md
           changes="$(awk -v heading="## ${VERSION}" '
             $0 == heading { found = 1; next }
             found && /^## / { exit }
@@ -372,12 +148,7 @@ jobs:
             { printf '更新内容：\n\n%s\n\n' "$changes"; cat notes.md; } > notes.tmp
             mv notes.tmp notes.md
           fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" release/* --clobber
-            gh release edit "$TAG" --title "小果影视 ${VERSION}" --notes-file notes.md
-          else
-            gh release create "$TAG" release/* --target "$GITHUB_SHA" --title "小果影视 ${VERSION}" --notes-file notes.md
-          fi
+          gh release create "$TAG" release/* --target "$GITHUB_SHA" --title "小果影视 ${VERSION}" --notes-file notes.md
       - name: 推送到 Telegram 频道
         continue-on-error: true
         env:
