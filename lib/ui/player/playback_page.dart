@@ -109,11 +109,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
     if (shown && !_shown) _closeRoutesAbove();
     if (!shown && _shown) _pageScope.requestFocus();
     _shown = shown;
-    if (!_television) {
-      _session.setForeground(
-        playerVisible(WidgetsBinding.instance.lifecycleState),
-      );
-    }
+    if (!_television) _session.setPictureInPicture(shown);
     _sync();
     setState(() {});
   }

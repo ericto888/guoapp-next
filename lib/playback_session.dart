@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show Size;
+import 'dart:ui' show AppLifecycleState, Size;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 
+import 'app_device.dart';
 import 'core_bridge.dart';
 import 'danmaku_controller.dart';
 import 'danmaku_style.dart';
@@ -178,6 +179,11 @@ class PlaybackSession extends ChangeNotifier {
   bool _acceptErrors = false;
   bool _foreground = true;
   bool _playIntent = true;
+  bool _resumeIntent = true;
+  bool _lifecycleDormant = false;
+  bool _pipActive = false;
+  AppLifecycleState? _lastLifecycle;
+  int _restoreToken = 0;
   bool _pendingError = false;
   bool _boosting = false;
   bool _boostLocked = false;
@@ -645,8 +651,10 @@ class PlaybackSession extends ChangeNotifier {
     _errorTimer?.cancel();
     _health.reset();
     if (recovery == null) {
+      _restoreToken++;
       _recovery.reset();
       _playIntent = playWhenReady;
+      _resumeIntent = playWhenReady;
     }
     _resumePosition = position;
     _openedAt = position;
@@ -916,7 +924,9 @@ class PlaybackSession extends ChangeNotifier {
   void togglePlayback() {
     if (!_usable || !ready) return;
     endBoost();
+    _restoreToken++;
     _playIntent = !player.state.playing;
+    _resumeIntent = _playIntent;
     _health.reset();
     if (_playIntent && player.state.completed) {
       unawaited(play(_index));
@@ -1156,6 +1166,186 @@ class PlaybackSession extends ChangeNotifier {
     final normalized = normalizeDanmakuWords(words);
     await _savePreferences(_preferences.copyWith(danmakuWords: normalized));
     _notify();
+  }
+
+  void onLifecycleEvent(AppLifecycleState state, {String source = 'ui'}) {
+    if (_closed || _lastLifecycle == state) return;
+    _lastLifecycle = state;
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _onResumed(source);
+      case AppLifecycleState.inactive:
+        _onInactive(source);
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _onBackground(state, source);
+    }
+  }
+
+  void setPictureInPicture(bool active) {
+    if (_closed || _pipActive == active) return;
+    _pipActive = active;
+    DiaryService.add('[Play] 画中画 ${active ? '开启' : '关闭'}');
+    if (active) {
+      if (!_foreground) {
+        _foreground = true;
+        _playIntent = _resumeIntent;
+        _health.reset();
+        _sync();
+        if (_resumeIntent && ready) {
+          unawaited(_restoreAfterLifecycle(++_restoreToken));
+        }
+      }
+      _notify();
+      return;
+    }
+    final state = _lastLifecycle;
+    if (state != null && state != AppLifecycleState.resumed) {
+      _onBackground(state, 'pip_exit');
+    }
+  }
+
+  void _snapshotForBackground() {
+    final position = player.state.position;
+    if (_openedIndex == _index && position > Duration.zero) {
+      _resumePosition = position.inMilliseconds / 1000;
+    }
+    _resumeIntent = _playIntent;
+  }
+
+  void _onInactive(String source) {
+    if (_foreground) _snapshotForBackground();
+    _lifecycleDormant = true;
+    DiaryService.add(
+      '[Play] 生命周期 inactive 来源=$source 集=${_index + 1} '
+      '位置=${_resumePosition.toStringAsFixed(1)} 续播=$_resumeIntent',
+    );
+    // iOS 锁屏/控制中心可能只发送 inactive→resumed。
+    // 此阶段不主动 pause，保留最后一帧与原始播放意图。
+    _notify();
+  }
+
+  void _onBackground(AppLifecycleState state, String source) {
+    if (_pipActive) {
+      DiaryService.add('[Play] 生命周期 ${state.name} 但画中画活跃，保持播放');
+      return;
+    }
+    if (!_foreground) return;
+    _snapshotForBackground();
+    _foreground = false;
+    _playIntent = false;
+    _restoreToken++;
+    endBoost();
+    _health.reset();
+    _sync();
+    DiaryService.add(
+      '[Play] 进入后台 来源=${state.name}:$source 集=${_index + 1} '
+      '位置=${_resumePosition.toStringAsFixed(1)} 续播=$_resumeIntent',
+    );
+    unawaited(player.pause());
+    unawaited(saveProgress());
+    _notify();
+  }
+
+  void _onResumed(String source) {
+    final wasForeground = _foreground;
+    final dormant = _lifecycleDormant;
+    _lifecycleDormant = false;
+    DiaryService.add(
+      '[Play] 回到前台 来源=$source 原前台=$wasForeground '
+      '仅inactive=$dormant 续播=$_resumeIntent',
+    );
+    if (!wasForeground) {
+      // 先恢复播放意图再通知 UI，避免解锁后先闪出暂停图标。
+      _foreground = true;
+      _playIntent = _resumeIntent;
+      _health.reset();
+      _sync();
+      if (_pendingError) {
+        _queueRecovery('foreground_pending_error');
+      } else if (_resumeIntent && ready) {
+        unawaited(_restoreAfterLifecycle(++_restoreToken));
+      }
+      _notify();
+      return;
+    }
+    if (dormant && _resumeIntent && ready && !_loading) {
+      // 仅 inactive→resumed 的锁屏恢复也要重新激活音频会话并确认位置推进。
+      unawaited(_restoreAfterLifecycle(++_restoreToken));
+    } else if (_pendingError && _resumeIntent) {
+      _queueRecovery('foreground_pending_error');
+    }
+    _notify();
+  }
+
+  bool _lifecycleRestoreValid(int token, int generation) =>
+      !_closed &&
+      _foreground &&
+      _resumeIntent &&
+      token == _restoreToken &&
+      generation == _generation;
+
+  Future<void> _restoreAfterLifecycle(int token) async {
+    final generation = _generation;
+    final index = _index;
+    final before = player.state.position;
+    if (Platform.isIOS) {
+      final activated = await AppDevice.activateAudio();
+      if (!activated) {
+        DiaryService.add('[Play] iOS 音频会话激活失败，继续尝试恢复播放');
+      }
+    }
+    if (!_lifecycleRestoreValid(token, generation) || index != _index) return;
+
+    final saved = Duration(milliseconds: (_resumePosition * 1000).round());
+    final current = player.state.position;
+    if (saved > Duration.zero &&
+        (current - saved).inMilliseconds.abs() > 2000) {
+      try {
+        await player.seek(saved);
+      } catch (_) {}
+    }
+    if (!_lifecycleRestoreValid(token, generation)) return;
+
+    _playIntent = true;
+    _sync();
+    _notify();
+    try {
+      await player.play();
+    } catch (error) {
+      DiaryService.add('[Play] 前台恢复 play 失败：${_diagnostic(error)}');
+      if (_lifecycleRestoreValid(token, generation)) {
+        _queueRecovery('lifecycle_resume_play_failed');
+      }
+      return;
+    }
+
+    for (var attempt = 0; attempt < 4; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (!_lifecycleRestoreValid(token, generation) || index != _index) return;
+      final state = player.state;
+      if (state.playing &&
+          state.position > before + const Duration(milliseconds: 250)) {
+        DiaryService.add('[Play] 前台原地恢复成功 位置=${state.position}');
+        _resumePosition = state.position.inMilliseconds / 1000;
+        _health.reset();
+        _notify();
+        return;
+      }
+      if (state.buffering) continue;
+      if (!state.playing) {
+        try {
+          await player.play();
+        } catch (_) {
+          break;
+        }
+      }
+    }
+    if (_lifecycleRestoreValid(token, generation)) {
+      DiaryService.add('[Play] 前台恢复后播放位置未推进，启动播放器恢复流程');
+      _queueRecovery('lifecycle_resume_no_progress');
+    }
   }
 
   void setForeground(bool visible) {

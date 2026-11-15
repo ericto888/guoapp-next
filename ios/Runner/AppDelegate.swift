@@ -24,6 +24,12 @@ import MediaPlayer
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     ZgjEnsureCoreLinked()
+    // 使用 playback 音频会话，保持 iOS 切换 App / 锁屏期间播放器和纹理可恢复。
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, mode: .moviePlayback, options: [])
+      try session.setActive(true)
+    } catch {}
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -45,6 +51,19 @@ import MediaPlayer
         }
         let arguments = call.arguments as? [String: Any]
         switch call.method {
+        case "activateAudio":
+          do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .moviePlayback, options: [])
+            try session.setActive(true)
+            result(true)
+          } catch {
+            result(FlutterError(
+              code: "audio_session_activation_failed",
+              message: error.localizedDescription,
+              details: nil))
+          }
+          return
         case "getBrightness":
           result(self.screen.map { Double($0.brightness) })
           return

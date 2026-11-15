@@ -154,7 +154,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) =>
-      _session.setForeground(playerVisible(state));
+      _session.onLifecycleEvent(state, source: 'landscape');
 
   void _bind() {
     final player = _session.player;

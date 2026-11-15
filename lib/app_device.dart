@@ -162,6 +162,18 @@ class AppDevice {
     }
   }
 
+  static Future<bool> activateAudio() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return true;
+    try {
+      final activated = await channel
+          .invokeMethod<bool>('activateAudio')
+          .timeout(const Duration(seconds: 3));
+      return activated ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> requestVideoExport() async {
     try {
       return await channel.invokeMethod<bool>('requestVideoExport') ?? false;
