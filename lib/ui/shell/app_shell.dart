@@ -153,7 +153,8 @@ class _AppShellState extends State<AppShell> {
       if (switch (tab) {
         AppTab.history =>
           widget.store.historyTab && !AppScope.of(context).television,
-        AppTab.modules => widget.store.profile.admin,
+        AppTab.modules =>
+          widget.store.profile.admin && widget.store.showModulesTab,
         AppTab.explore || AppTab.follow || AppTab.mine => true,
       })
         tab,

@@ -13,7 +13,6 @@ import 'app_scope.dart';
 import 'cover_blur.dart';
 import 'device_registration.dart';
 import 'shell/app_shell.dart';
-import 'terms_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/motion.dart';
 import 'theme/system_color.dart';
@@ -283,7 +282,6 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
           error: widget.bootstrapError,
           onRetry: widget.onRetry,
         ),
-        LocalStore(acceptedTerms: < termsVersion) => TermsPage(store: store),
         LocalStore(locked: true) => UnlockPage(store: store),
         _ => DeviceRegistrationGate(
           store: store,
