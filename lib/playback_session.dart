@@ -47,6 +47,7 @@ class PlaybackSession extends ChangeNotifier {
     this._standby,
     this._respawn,
     this._onRetired,
+    this._spawnStandby,
     required int index,
     double position = 0,
     bool autoplay = true,
@@ -157,6 +158,7 @@ class PlaybackSession extends ChangeNotifier {
   /// 切出/锁屏后底层实例可能已被系统回收，恢复播放前需要重建播放器。
   final Player Function()? _respawn;
   final void Function(Player player)? _onRetired;
+  final Player Function()? _spawnStandby;
   bool _rebuilding = false;
   bool _rebuildQueued = false;
   double _queuedPosition = 0;
@@ -692,7 +694,8 @@ class PlaybackSession extends ChangeNotifier {
         position == 0 &&
         _standbyOpen &&
         _standbyIndex == index &&
-        !_online) {
+        !_online &&
+        (_standbyPlan == null || _standbyPlan!.streamEpoch == _streamEpoch)) {
       return _swap(index, playWhenReady);
     }
     _dropStandby();
@@ -1278,6 +1281,28 @@ class PlaybackSession extends ChangeNotifier {
     _resumeIntent = _playIntent;
   }
 
+  /// 进入后台时让待机播放器彻底失效。
+  ///
+  /// 系统可能在挂起期间回收本机取流监听，待机预开的地址随之失效；
+  /// 若继续保留，回前台后切下一集会 swap 到死地址而卡住。
+  /// 这里释放旧实例与预开计划，回前台后由新的实例重新预加载。
+  void _invalidateStandbyForBackground() {
+    final standby = _standby;
+    if (standby == null && _standbyPlan == null) return;
+    _dropStandby();
+    _standby = null;
+    if (standby != null) {
+      unawaited(
+        standby
+            .stop()
+            .timeout(const Duration(milliseconds: 1500))
+            .catchError((Object _) {})
+            .whenComplete(() => _retire(standby)),
+      );
+    }
+    _standby = _spawnStandby?.call();
+  }
+
   void _onInactive(String source) {
     if (_foreground) _snapshotForBackground();
     _lifecycleDormant = true;
@@ -1297,6 +1322,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     if (!_foreground) return;
     _snapshotForBackground();
+    _invalidateStandbyForBackground();
     _foreground = false;
     _playIntent = false;
     _restoreToken++;

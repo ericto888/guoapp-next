@@ -566,4 +566,22 @@ void main() {
     expect(identical(session.player, rebuilt), isTrue);
     expect(repository.fallbacks, 0);
   });
+
+  test('background drops the standby player', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final standby = FakePlayer();
+    final (session, player) = await _open(repository, store, standby: standby);
+    await _settle(player);
+    expect(session.standbyIndex, 1);
+    expect(identical(session.standby, standby), isTrue);
+
+    // 系统可能在后台回收本机监听，待机地址随之失效，必须换新实例。
+    session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(session.standbyIndex, -1);
+    expect(session.standby, isNull);
+    expect(standby.disposed, isTrue);
+  });
 }

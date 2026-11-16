@@ -33,6 +33,7 @@ class PlaybackHandle {
       standby: standby,
       respawn: _respawnPlayer,
       onRetired: _retireVideo,
+      spawnStandby: preopen ? _respawnPlayer : null,
       index: index,
       position: position,
       autoplay: autoplay,
