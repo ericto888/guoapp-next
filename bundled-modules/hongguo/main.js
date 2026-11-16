@@ -1004,7 +1004,7 @@ function registerDevice() {
   const requestUrl = deviceRegisterUrl + "&" + encodeQuery(query);
   const ticket = host.reserve({ url: requestUrl });
   const response = host.fetch({
-    method: "POST", url: requestUrl, body, ticket,
+    method: "POST", url: requestUrl, bodyBase64: host.base64Encode(body), ticket,
     limit: 64 * 1024, timeoutMs: appRequestTimeoutMs, followRedirects: true, anyStatus: true,
     headers: {
       "User-Agent": appUserAgent,
