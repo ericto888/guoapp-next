@@ -196,6 +196,18 @@ func (p *jsProvider) hostUtilities(instance *jsInstance) map[string]any {
 			sum := sha512.Sum512(bytesOf(data))
 			return bytesValue(sum[:])
 		},
+		"hongguoTTEncrypt": func(data, nonce goja.Value) (goja.Value, error) {
+			var randomNonce []byte
+			if goja.IsUndefined(nonce) || goja.IsNull(nonce) {
+				randomNonce = make([]byte, 32)
+				if _, err := rand.Read(randomNonce); err != nil { return nil, err }
+			} else {
+				randomNonce = bytesOf(nonce)
+			}
+			sealed, err := hongguoTTEncrypt(bytesOf(data), randomNonce)
+			if err != nil { return nil, err }
+			return bytesValue(sealed), nil
+		},
 		"gzipCompress": func(data goja.Value) (goja.Value, error) {
 			var output bytes.Buffer
 			writer := gzip.NewWriter(&output)
@@ -283,6 +295,54 @@ func (p *jsProvider) hostUtilities(instance *jsInstance) map[string]any {
 			return bytesValue(key), nil
 		},
 	}
+}
+
+
+var hongguoTTEncryptSalt = mustDecodeHex("4dd4c2e6b83162090e52b3c7a6733ba41cb2462b829ab58a196b39db57177524f49baf7f08e8d68d26a72e37c1a95a2f1f05a51892aef2949732b62a38aadd58")
+
+func mustDecodeHex(value string) []byte {
+	decoded, err := hex.DecodeString(value)
+	if err != nil { panic(err) }
+	return decoded
+}
+
+// hongguoTTEncrypt mirrors the device-registration TTEncrypt pipeline used by
+// the inspected Hongguo client: SHA-512 key derivation, a 64-byte digest
+// prelude, and an AES-128 block-CBC chain. nonce is injectable for test vectors.
+func hongguoTTEncrypt(plain, nonce []byte) ([]byte, error) {
+	if len(nonce) != 32 { return nil, errors.New("TTEncrypt nonce must be 32 bytes") }
+	first := sha512.Sum512(nonce)
+	secondInput := make([]byte, 0, len(first)+len(hongguoTTEncryptSalt))
+	secondInput = append(secondInput, first[:]...)
+	secondInput = append(secondInput, hongguoTTEncryptSalt...)
+	second := sha512.Sum512(secondInput)
+	block, err := aes.NewCipher(second[:16])
+	if err != nil { return nil, err }
+
+	inputDigest := sha512.Sum512(plain)
+	out := make([]byte, 0, 6+32+64+len(plain)+aes.BlockSize)
+	out = append(out, 0x74, 0x63, 0x05, 0x10, 0x00, 0x00)
+	out = append(out, nonce...)
+	chain := append([]byte(nil), second[16:32]...)
+	encryptBlock := func(src []byte) {
+		mixed := make([]byte, aes.BlockSize)
+		for i := 0; i < aes.BlockSize; i++ { mixed[i] = src[i] ^ chain[i] }
+		ciphertext := make([]byte, aes.BlockSize)
+		block.Encrypt(ciphertext, mixed)
+		out = append(out, ciphertext...)
+		copy(chain, ciphertext)
+	}
+	for offset := 0; offset < len(inputDigest); offset += aes.BlockSize {
+		encryptBlock(inputDigest[offset:offset+aes.BlockSize])
+	}
+	padded := make([]byte, len(plain)+(aes.BlockSize-len(plain)%aes.BlockSize))
+	copy(padded, plain)
+	padding := byte(len(padded)-len(plain))
+	for i := len(plain); i < len(padded); i++ { padded[i] = padding }
+	for offset := 0; offset < len(padded); offset += aes.BlockSize {
+		encryptBlock(padded[offset:offset+aes.BlockSize])
+	}
+	return out, nil
 }
 
 func moduleCBC(key, iv, data []byte) (cipher.Block, []byte, []byte, error) {
