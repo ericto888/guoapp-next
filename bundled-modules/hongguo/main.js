@@ -1127,13 +1127,20 @@ function appRequest(method, path, extra, payload, options) {
     const now = Date.now();
     query._rticket = String(now);
     const rawQuery = encodeQuery(query);
-    const headers = { "User-Agent": appUserAgent, Accept: "application/json", "X-XS-From-Web": "0", "Sdk-Version": "2" };
+    const headers = { "User-Agent": appUserAgent, Accept: "application/json", "X-SS-From-Web": "0", "Sdk-Version": "2" };
     if (comment) {
       headers["Comment-Source"] = "601";
       headers["Server-Channel"] = "1000";
       Object.assign(headers, signComment(rawQuery, query.aid, now, nonce));
     } else if (signed) {
-      Object.assign(headers, signPlayer(rawQuery, body, query.aid, query.device_id, now, host.randomBytes(11)));
+      const signature = signPlayer(rawQuery, body, query.aid, query.device_id, now, host.randomBytes(11));
+      if (options.gorgonOnly === true) {
+        for (const key of ["X-Khronos", "X-Gorgon", "X-SS-Req-Ticket", "X-SS-STUB"]) {
+          if (signature[key] !== undefined) headers[key] = signature[key];
+        }
+      } else {
+        Object.assign(headers, signature);
+      }
     }
     if (body !== null) {
       headers["Content-Type"] = "application/json; charset=utf-8";
@@ -1921,6 +1928,7 @@ function fetchAppMedia(videoId, helper) {
       const result = appRequest("POST", route.path, null, payload, {
         helper,
         baseUrl: route.baseUrl,
+        gorgonOnly: route.single,
       });
       const data = nested(result, "data");
       const entry = route.single
