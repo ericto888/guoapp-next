@@ -81,7 +81,7 @@ func (d *Downloader) installBundledModulesLocked() {
 			continue
 		}
 		if installed, err := readModule(filepath.Join(d.moduleRoot(), id)); err == nil &&
-			!newerModuleVersion(module.manifest.Version, installed.manifest.Version) {
+			!shouldReplaceBundledModule(module.manifest.Version, installed.manifest.Version) {
 			continue
 		}
 		if err := d.writeModuleLocked(id, module.raw, module.code); err != nil {
@@ -128,6 +128,17 @@ func (d *Downloader) markBundledRemoved(id string, removed bool) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(d.moduleRoot(), bundledRemovedFile), raw, 0o600)
+}
+
+// shouldReplaceBundledModule also migrates the legacy Hongguo module whose
+// version was incorrectly populated with the Flutter app release (2.0.2+121).
+// The app release is not a module version; replace it with the bundled module's
+// own version so existing installations actually load the upstream module.
+func shouldReplaceBundledModule(candidate, current string) bool {
+	if candidate == "1.0.2" && current == "2.0.2+121" {
+		return true
+	}
+	return newerModuleVersion(candidate, current)
 }
 
 func newerModuleVersion(candidate, current string) bool {
