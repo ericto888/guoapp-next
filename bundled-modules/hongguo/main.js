@@ -998,7 +998,7 @@ function registerDevice() {
   delete query.device_id;
   delete query.iid;
   query.req_id = uuidLike();
-remove unverified registration query  const ticket = host.reserve({ url: deviceRegisterUrl });
+const ticket = host.reserve({ url: deviceRegisterUrl });
   query._rticket = String(Date.now());
   const response = host.fetch({
     method: "POST", url: deviceRegisterUrl + "?" + encodeQuery(query), body, ticket,
@@ -1087,7 +1087,7 @@ function appRequest(method, path, extra, payload, options) {
     try {
       ensureDevice(helper, "");
     } catch (error) {
-      registerError = error;
+      throw new Error("红果设备注册失败，已停止发送播放请求：" + message(error));
     }
   }
   let [deviceId, installId] = deviceOf(currentState(), helper);
