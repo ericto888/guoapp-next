@@ -2,7 +2,7 @@ const siteBaseUrl = "https://hongguoduanju.com";
 const appBaseUrl = "https://api5-normal-sinfonlineb.fqnovel.com";
 const appUserAgent = "com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)";
 const webUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1";
-const deviceRegisterUrl = "https://log.snssdk.com/service/2/device_register/";
+const deviceRegisterUrl = "https://log5-applog-lf.fqnovel.com/service/2/device_register/?tt_data=a&cronet_version=8d40f833_2026-03-03&ttnet_version=4.2.243.31-douyin&use_store_region_cookie=1";
 const mediaReferer = "https://novel.snssdk.com/";
 const responseLimit = 20 * 1024 * 1024;
 const cencScheme = "hongguo-cenc://";
@@ -993,17 +993,25 @@ function registerDevice() {
     region: "CN", tz_name: "Asia/Shanghai", tz_offset: 28800, sim_region: "cn", device_platform: "android",
     not_request_sender: 0, is_system_app: 0, sdk_flavor: "china", rom: "OS2.0", rom_version: "BP2A.250605.031.A3",
   };
-  const body = JSON.stringify({ magic_tag: "ss_app_log", header, _gen_time: Date.now() });
+  const payload = host.utf8Encode(JSON.stringify({ magic_tag: "ss_app_log", header, _gen_time: Date.now() }));
+  const compressed = host.gzipCompress(payload);
+  const body = host.hongguoTTEncrypt(compressed);
   const query = appQuery("", "");
   delete query.device_id;
   delete query.iid;
   query.req_id = uuidLike();
-const ticket = host.reserve({ url: deviceRegisterUrl });
   query._rticket = String(Date.now());
+  const requestUrl = deviceRegisterUrl + "&" + encodeQuery(query);
+  const ticket = host.reserve({ url: requestUrl });
   const response = host.fetch({
-    method: "POST", url: deviceRegisterUrl + "?" + encodeQuery(query), body, ticket,
+    method: "POST", url: requestUrl, body, ticket,
     limit: 64 * 1024, timeoutMs: appRequestTimeoutMs, followRedirects: true, anyStatus: true,
-    headers: { "User-Agent": appUserAgent, Accept: "application/json", "Content-Type": "application/json; charset=utf-8" },
+    headers: {
+      "User-Agent": appUserAgent,
+      Accept: "application/json",
+      "Content-Type": "application/octet-stream",
+      "X-SS-STUB": host.hexEncode(host.md5(body)),
+    },
   });
   if (response.status >= 500) {
     throw new Error("红果设备注册 HTTP " + response.status);
