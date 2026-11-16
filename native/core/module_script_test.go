@@ -337,6 +337,9 @@ module.exports = {
     const opened = host.utf8Decode(host.aesGcmOpen(key, nonce, sealed, "aad"));
     let tampered = "accepted";
     try { host.aesGcmOpen(key, nonce, sealed, "other"); } catch (error) { tampered = "rejected"; }
+    const nonce = new Uint8Array(Array.from({length: 32}, (_, i) => i));
+    const tt = host.hongguoTTEncrypt(host.utf8Encode("hongguo-ttencrypt-test"), nonce);
+    const ttCheck = host.hexEncode(tt.slice(0, 6)) + ":" + tt.length;
     const gz = host.gzipCompress(host.utf8Encode("hongguo-device"));
     const gzMagic = host.hexEncode(gz.slice(0, 2));
     const sha = host.hexEncode(host.sha512(host.utf8Encode("abc")));
@@ -344,7 +347,7 @@ module.exports = {
     const agreed = host.hexEncode(host.ecdhP256(left.privateKey, right.publicKey)) === host.hexEncode(host.ecdhP256(right.privateKey, left.publicKey));
     const okm = host.hexEncode(host.hkdfSha256(host.hexDecode("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
       host.hexDecode("000102030405060708090a0b0c"), host.hexDecode("f0f1f2f3f4f5f6f7f8f9"), 42));
-    return { items: [{ id: host.dramaId("x"), title: [plain, opened, tampered, agreed, left.publicKey.length, okm, gzMagic, sha].join("|") }], hasMore: false };
+    return { items: [{ id: host.dramaId("x"), title: [plain, opened, tampered, agreed, left.publicKey.length, okm, gzMagic, sha, ttCheck].join("|") }], hasMore: false };
   },
   detail() { return {}; },
   resolveMedia() { return {}; },
