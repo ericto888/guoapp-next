@@ -984,6 +984,7 @@ function appQuery(deviceId, installId) {
 }
 
 function registerDevice() {
+  const nowMs = Date.now();
   const header = {
     display_name: "红果免费短剧", aid: 8662, app_version: "7.3.5.32", version_code: 73532,
     manifest_version_code: 73532, update_version_code: 73532, channel: "update_64", package: "com.phoenix.read",
@@ -994,14 +995,14 @@ function registerDevice() {
     region: "CN", tz_name: "Asia/Shanghai", tz_offset: 28800, sim_region: "cn", device_platform: "android",
     not_request_sender: 0, is_system_app: 0, sdk_flavor: "china", rom: "OS2.0", rom_version: "BP2A.250605.031.A3",
   };
-  const payload = host.utf8Encode(JSON.stringify({ magic_tag: "ss_app_log", header, _gen_time: Date.now() }));
+  const payload = host.utf8Encode(JSON.stringify({ magic_tag: "ss_app_log", header, _gen_time: nowMs }));
   const compressed = host.gzipCompress(payload);
   const body = host.hongguoTTEncrypt(compressed);
   const query = appQuery("", "");
   delete query.device_id;
   delete query.iid;
   query.req_id = uuidLike();
-  query._rticket = String(Date.now());
+  query._rticket = String(nowMs);
   const requestUrl = deviceRegisterUrl + "&" + encodeQuery(query);
   const ticket = host.reserve({ url: requestUrl });
   const response = host.fetch({
@@ -1012,6 +1013,8 @@ function registerDevice() {
       Accept: "application/json",
       "Content-Type": "application/octet-stream",
       "X-SS-STUB": host.hexEncode(host.md5(body)),
+      "X-Khronos": String(Math.floor(nowMs / secondMs)),
+      "X-SS-Req-Ticket": String(nowMs),
     },
   });
   if (response.status >= 500) {
