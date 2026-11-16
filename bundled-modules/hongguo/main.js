@@ -1,6 +1,7 @@
 const siteBaseUrl = "https://hongguoduanju.com";
 const appBaseUrl = "https://api5-normal-sinfonlineb.fqnovel.com";
 const appUserAgent = "com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)";
+const deviceRegisterUserAgent = "com.phoenix.read/71332 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)";
 const webUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1";
 const deviceRegisterUrl = "https://log5-applog-lf.fqnovel.com/service/2/device_register/?tt_data=a&cronet_version=8d40f833_2026-03-03&ttnet_version=4.2.243.31-douyin&use_store_region_cookie=1";
 const mediaReferer = "https://novel.snssdk.com/";
@@ -1007,7 +1008,7 @@ function registerDevice() {
     method: "POST", url: requestUrl, bodyBase64: host.base64Encode(body), ticket,
     limit: 64 * 1024, timeoutMs: appRequestTimeoutMs, followRedirects: true, anyStatus: true,
     headers: {
-      "User-Agent": appUserAgent,
+      "User-Agent": deviceRegisterUserAgent,
       Accept: "application/json",
       "Content-Type": "application/octet-stream",
       "X-SS-STUB": host.hexEncode(host.md5(body)),
