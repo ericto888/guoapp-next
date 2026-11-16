@@ -12,7 +12,10 @@
     "log.snssdk.com",
     "novel.snssdk.com",
     "reading.snssdk.com",
-    "api5-normal.fqnovel.com"
+    "api5-normal.fqnovel.com",
+    "api5-normal-sinfonlinea.fqnovel.com",
+    "api5-normal-sinfonlinec.fqnovel.com",
+    "log5-applog-lf.fqnovel.com"
   ],
   "capabilities": [
     "search",
