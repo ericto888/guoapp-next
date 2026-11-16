@@ -2,7 +2,7 @@ const siteBaseUrl = "https://hongguoduanju.com";
 const appBaseUrl = "https://api5-normal-sinfonlineb.fqnovel.com";
 const appUserAgent = "com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)";
 const webUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1";
-const deviceRegisterUrl = "https://log5-applog-lf.fqnovel.com/service/2/device_register/";
+const deviceRegisterUrl = "https://log.snssdk.com/service/2/device_register/";
 const mediaReferer = "https://novel.snssdk.com/";
 const responseLimit = 20 * 1024 * 1024;
 const cencScheme = "hongguo-cenc://";
@@ -998,11 +998,7 @@ function registerDevice() {
   delete query.device_id;
   delete query.iid;
   query.req_id = uuidLike();
-  query.tt_data = "a";
-  query.cronet_version = "8d40f833_2026-03-03";
-  query.ttnet_version = "4.2.243.31-douyin";
-  query.use_store_region_cookie = "1";
-  const ticket = host.reserve({ url: deviceRegisterUrl });
+remove unverified registration query  const ticket = host.reserve({ url: deviceRegisterUrl });
   query._rticket = String(Date.now());
   const response = host.fetch({
     method: "POST", url: deviceRegisterUrl + "?" + encodeQuery(query), body, ticket,
@@ -1138,13 +1134,7 @@ function appRequest(method, path, extra, payload, options) {
       Object.assign(headers, signComment(rawQuery, query.aid, now, nonce));
     } else if (signed) {
       const signature = signPlayer(rawQuery, body, query.aid, query.device_id, now, host.randomBytes(11));
-      if (options.gorgonOnly === true) {
-        for (const key of ["X-Khronos", "X-Gorgon", "X-SS-Req-Ticket", "X-SS-STUB"]) {
-          if (signature[key] !== undefined) headers[key] = signature[key];
-        }
-      } else {
-        Object.assign(headers, signature);
-      }
+      Object.assign(headers, signature);
     }
     if (body !== null) {
       headers["Content-Type"] = "application/json; charset=utf-8";
