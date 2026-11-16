@@ -740,7 +740,7 @@ function putUint32BE(data, offset, value) {
   }
 }
 
-function signPlayer(rawQuery, body, aid, deviceId, nowMs, nonce) {
+function signPlayer(rawQuery, body, aid, appName, deviceId, nowMs, nonce) {
   const stamp = Math.floor(nowMs / secondMs) >>> 0;
   const headers = {};
   const queryHash = host.md5(rawQuery);
@@ -771,7 +771,7 @@ function signPlayer(rawQuery, body, aid, deviceId, nowMs, nonce) {
   headers["X-Gorgon"] = host.hexEncode([0x84, 0x04, 0x40, 0x1c, 0, 0].concat(payload));
   headers["X-SS-Req-Ticket"] = String(nowMs);
   headers["X-Argus"] = playerArgus(rawQuery, body, stamp, deviceId, nonce);
-  headers["X-Ladon"] = ladon(aid, stamp, sliceBytes(nonce, 2, 6), aid);
+  headers["X-Ladon"] = ladon(aid, stamp, sliceBytes(nonce, 2, 6), appName);
   return headers;
 }
 
@@ -1145,7 +1145,7 @@ function appRequest(method, path, extra, payload, options) {
       headers["Server-Channel"] = "1000";
       Object.assign(headers, signComment(rawQuery, query.aid, now, nonce));
     } else if (signed) {
-      const signature = signPlayer(rawQuery, body, query.aid, query.device_id, now, host.randomBytes(11));
+      const signature = signPlayer(rawQuery, body, query.aid, query.app_name, query.device_id, now, host.randomBytes(11));
       Object.assign(headers, signature);
     }
     if (body !== null) {
