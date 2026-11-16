@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,6 +53,7 @@ type jsFetchRequest struct {
 	URL             string            `json:"url"`
 	Headers         map[string]string `json:"headers"`
 	Body            string            `json:"body"`
+	BodyBase64      string            `json:"bodyBase64"`
 	TimeoutMS       int64             `json:"timeoutMs"`
 	Limit           int64             `json:"limit"`
 	FollowRedirects bool              `json:"followRedirects"`
@@ -504,9 +506,17 @@ func (p *jsProvider) fetch(ctx context.Context, request jsFetchRequest) (jsFetch
 	if request.Background {
 		ctx = context.WithValue(ctx, BackgroundCatalogKey{}, true)
 	}
+	body := moduleBody(request.Body)
+	if request.BodyBase64 != "" {
+		decoded, decodeErr := base64.StdEncoding.Strict().DecodeString(request.BodyBase64)
+		if decodeErr != nil {
+			return jsFetchResponse{}, errors.New("请求二进制内容无效")
+		}
+		body = decoded
+	}
 	response, err := p.host.Fetch(ctx, HTTPRequest{
 		Label: p.module.manifest.Name, Method: request.Method, URL: request.URL, Header: request.Headers,
-		Body: moduleBody(request.Body), Timeout: time.Duration(request.TimeoutMS) * time.Millisecond, Limit: request.Limit,
+		Body: body, Timeout: time.Duration(request.TimeoutMS) * time.Millisecond, Limit: request.Limit,
 		FollowRedirects: request.FollowRedirects, AnyStatus: request.AnyStatus, AcceptJSONStatus: request.AcceptStatus, Ticket: request.Ticket,
 		Direct: request.Direct,
 	})
