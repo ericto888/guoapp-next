@@ -109,6 +109,18 @@ func TestBundledModulesInstallRespectRemovalAndVersions(t *testing.T) {
 	}
 }
 
+func TestShouldReplaceBundledModuleMigratesLegacyHongguoAppVersion(t *testing.T) {
+	if !shouldReplaceBundledModule("1.0.2", "2.0.2+121") {
+		t.Fatal("legacy app release version was not migrated to Hongguo module 1.0.2")
+	}
+	if shouldReplaceBundledModule("1.0.2", "1.0.3") {
+		t.Fatal("newer installed module must not be replaced")
+	}
+	if !shouldReplaceBundledModule("1.0.3", "1.0.2") {
+		t.Fatal("newer bundled module should replace older installed module")
+	}
+}
+
 func TestNewerModuleVersion(t *testing.T) {
 	cases := []struct {
 		candidate, current string
