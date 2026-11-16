@@ -1,6 +1,10 @@
 package core
 
-import "context"
+import (
+	"context"
+	"strconv"
+	"time"
+)
 
 func (engine *nativeEngine) nativeBeginPlayback(ctx context.Context, sequence int64) (context.Context, func(), error) {
 	engine.playbackMu.Lock()
@@ -36,4 +40,63 @@ func (engine *nativeEngine) nativeCancelPlayback(sequence int64) {
 		engine.playbackCancel()
 		engine.playbackCancel = nil
 	}
+}
+
+// nativePlaybackStatus 报告本机取流服务是否仍可接受连接，并返回当前监听代次
+// (streamEpoch)。应用被系统挂起后监听套接字会失效、被重建，代次随之自增；
+// 持旧代次的会话（Dart 端 PlaybackPlan.streamEpoch）应直接重建而不是换线路。
+func (engine *nativeEngine) nativePlaybackStatus() (bool, int64) {
+	engine.mu.Lock()
+	stream := engine.stream
+	epoch := engine.streamEpoch
+	engine.mu.Unlock()
+	return stream != nil && stream.nativeAlive(), epoch
+}
+
+// nativeEnsureStreamLocked 确认取流监听可用，必要时关闭旧监听并重建。
+// 每次替换监听都会让 streamEpoch 自增，供 Dart 端判断旧会话是否已失效。
+func (engine *nativeEngine) nativeEnsureStreamLocked() (*nativeStreamServer, int64, error) {
+	engine.mu.Lock()
+	current := engine.stream
+	epoch := engine.streamEpoch
+	engine.mu.Unlock()
+	if current != nil {
+		if current.nativeAlive() {
+			return current, epoch, nil
+		}
+		// 一次探活失败不直接判死，稍后再确认，避免误杀仍在恢复中的服务。
+		time.Sleep(120 * time.Millisecond)
+		if current.nativeAlive() {
+			return current, epoch, nil
+		}
+		closed := current.nativeClose()
+		engine.mu.Lock()
+		if engine.stream == current {
+			engine.stream = nil
+			// 旧会话随监听一起作废，指向它们的播放记录必须清掉。
+			engine.playbacks = map[string]nativePlaybackChoice{}
+		}
+		engine.mu.Unlock()
+		stream, err := newNativeStreamServer(engine.downloader)
+		if err != nil {
+			return nil, epoch, err
+		}
+		engine.mu.Lock()
+		engine.stream = stream
+		engine.streamEpoch++
+		epoch = engine.streamEpoch
+		engine.mu.Unlock()
+		stream.nativeLog(nativeStreamDiagnostic{}, "listener_recreated", "", "closed_sessions="+strconv.Itoa(closed), 0, "")
+		return stream, epoch, nil
+	}
+	stream, err := newNativeStreamServer(engine.downloader)
+	if err != nil {
+		return nil, epoch, err
+	}
+	engine.mu.Lock()
+	engine.stream = stream
+	engine.streamEpoch++
+	epoch = engine.streamEpoch
+	engine.mu.Unlock()
+	return stream, epoch, nil
 }

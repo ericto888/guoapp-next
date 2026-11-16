@@ -18,6 +18,12 @@ class _PlaybackRepository extends FakeRepository {
   var resolveFailure = '';
   var _sessions = 0;
 
+  bool streamAlive = true;
+
+  @override
+  Future<PlaybackStreamStatus> playbackStatus() async =>
+      PlaybackStreamStatus(alive: streamAlive);
+
   PlaybackPlan _plan({int route = 0}) {
     _sessions++;
     return PlaybackPlan(
@@ -534,5 +540,30 @@ void main() {
     expect(identical(session.player, rebuilt), isTrue);
     expect(player.disposed, isTrue);
     expect(rebuilt.opened.first.start, _seconds(5));
+  });
+
+  test('rebuilds when the local stream listener is gone', () async {
+    final repository = _PlaybackRepository()..streamAlive = false;
+    final store = await openStore();
+    final player = FakePlayer();
+    final rebuilt = FakePlayer();
+    final session = PlaybackSession(
+      repository: repository,
+      store: store,
+      detail: dramaDetail(_show, count: 3),
+      player: player,
+      respawn: () => rebuilt,
+      index: 0,
+    );
+    addTearDown(() {
+      if (_closed.add(session)) session.dispose();
+    });
+    await pumpEventQueue();
+
+    // 后台监听被系统回收：缓冲耗尽后播放器报 connection refused。
+    player.fail('tcp: Connection refused');
+    await Future<void>.delayed(const Duration(milliseconds: 2600));
+    expect(identical(session.player, rebuilt), isTrue);
+    expect(repository.fallbacks, 0);
   });
 }

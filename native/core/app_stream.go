@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -52,8 +53,11 @@ type nativeStreamServer struct {
 	address    string
 	sessions   map[string]*nativeStreamSession
 	server     *http.Server
+	listener   net.Listener
 	lan        *http.Server
 	lanPort    int
+	// 系统可能在应用挂起后回收监听套接字，Serve 返回即视为失效。
+	failed atomic.Bool
 }
 
 func (stream *nativeStreamServer) lanOrigin(device string) (string, error) {
@@ -123,11 +127,48 @@ func newNativeStreamServer(d *Downloader) (*nativeStreamServer, error) {
 	if err != nil {
 		return nil, errors.New("无法初始化本机播放器")
 	}
-	stream := &nativeStreamServer{downloader: d, address: "http://" + listener.Addr().String(), sessions: map[string]*nativeStreamSession{}}
+	stream := &nativeStreamServer{downloader: d, address: "http://" + listener.Addr().String(), sessions: map[string]*nativeStreamSession{}, listener: listener}
 	server := &http.Server{Handler: http.HandlerFunc(stream.nativeServe), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384}
 	stream.server = server
-	go func() { _ = server.Serve(listener) }()
+	go func() {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			stream.failed.Store(true)
+			stream.nativeLog(nativeStreamDiagnostic{}, "listener_error", "", err.Error(), 0, "")
+		}
+	}()
 	return stream, nil
+}
+
+// nativeAlive 判断本机取流服务是否仍可接受连接。
+// iOS 在后台回收监听套接字后，Serve 已经退出但地址仍留在旧播放地址里，
+// 播放器随后只会收到 connection refused，因此需要主动探活并重建。
+func (stream *nativeStreamServer) nativeAlive() bool {
+	if stream.failed.Load() || stream.listener == nil {
+		return false
+	}
+	connection, err := net.DialTimeout("tcp", stream.listener.Addr().String(), 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = connection.Close()
+	return true
+}
+
+// nativeClose 关闭监听与所有会话，返回关闭前仍在跟踪的会话数量。
+func (stream *nativeStreamServer) nativeClose() int {
+	stream.mu.Lock()
+	stream.failed.Store(true)
+	sessions := stream.sessions
+	stream.sessions = map[string]*nativeStreamSession{}
+	server := stream.server
+	stream.mu.Unlock()
+	for _, session := range sessions {
+		session.cancel()
+	}
+	if server != nil {
+		_ = server.Close()
+	}
+	return len(sessions)
 }
 
 func (stream *nativeStreamServer) nativeOpen(media ProviderMedia) (string, string) {

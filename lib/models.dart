@@ -358,6 +358,7 @@ class PlaybackPlan {
     this.expiresAt = 0,
     this.routeIndex = 0,
     this.routeCount = 1,
+    this.streamEpoch = 0,
     this.local = false,
   });
   final String url;
@@ -371,6 +372,9 @@ class PlaybackPlan {
   final int expiresAt;
   final int routeIndex;
   final int routeCount;
+
+  /// 本机取流监听的代次；系统回收监听后该值变化，旧地址随之失效。
+  final int streamEpoch;
   final bool local;
   bool get hasAlternative => session.isNotEmpty && routeIndex + 1 < routeCount;
   factory PlaybackPlan.fromJson(Map<String, dynamic> json) => PlaybackPlan(
@@ -391,6 +395,7 @@ class PlaybackPlan {
     routeCount: intValue(json['routeCount']) > 0
         ? intValue(json['routeCount'])
         : 1,
+    streamEpoch: intValue(json['streamEpoch']),
   );
 }
 

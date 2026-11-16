@@ -35,6 +35,9 @@ String _diagnostic(Object error) {
   return text.length > 300 ? text.substring(0, 300) : text;
 }
 
+/// 取流探活结果：只有两次都明确返回 false 才算确认失效。
+enum _StreamProbe { alive, dead, unknown }
+
 class PlaybackSession extends ChangeNotifier {
   PlaybackSession({
     required this.repository,
@@ -208,6 +211,7 @@ class PlaybackSession extends ChangeNotifier {
   String? _savedProgressKey;
   bool _savedQuietly = false;
   PlaybackPlan? _plan;
+  int _streamEpoch = 0;
   PlaybackPlan? _standbyPlan;
   int _standbyIndex = -1;
   bool _standbyOpen = false;
@@ -532,6 +536,30 @@ class PlaybackSession extends ChangeNotifier {
     });
   }
 
+  /// 取流探活：本机监听被系统回收后，旧播放地址只会得到 connection refused。
+  Future<_StreamProbe> _probeStream() async {
+    var sawDead = false;
+    var sawError = false;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+      try {
+        final status = await repository.playbackStatus().timeout(
+          const Duration(seconds: 2),
+        );
+        if (!_closed) _streamEpoch = status.epoch;
+        if (status.alive) return _StreamProbe.alive;
+        sawDead = true;
+      } catch (error) {
+        DiaryService.add('[Play] 取流探活异常：${_diagnostic(error)}');
+        sawError = true;
+      }
+    }
+    // 一次 false 一次异常仍属「未确认」，避免误触发重建。
+    return sawDead && !sawError ? _StreamProbe.dead : _StreamProbe.unknown;
+  }
+
   Future<void> _recover(String reason) async {
     final current = _plan;
     if (_closed ||
@@ -546,6 +574,21 @@ class PlaybackSession extends ChangeNotifier {
     _errorTimer?.cancel();
     _pendingError = false;
     final position = currentPosition;
+    if (!current.local) {
+      // 本机取流监听失效时，换线路只会继续指向同一个死端口。
+      final probe = await _probeStream();
+      if (_closed || !_usable || !identical(_plan, current)) return;
+      final stale = current.streamEpoch != _streamEpoch;
+      if (probe == _StreamProbe.dead || stale) {
+        DiaryService.add(
+          '[Play] 本机取流失效，重建播放器 探活=${probe.name} '
+          '代次=${current.streamEpoch}/$_streamEpoch 原因=$reason',
+        );
+        _acceptErrors = true;
+        await _rebuildAndResume(position, _foreground && _playIntent);
+        return;
+      }
+    }
     final action = current.local
         ? PlaybackRecoveryAction.stop
         : _recovery.next(current);
@@ -729,6 +772,7 @@ class PlaybackSession extends ChangeNotifier {
         await _limitCache(player, !_engaged);
         await _selectAudio(player, true);
         _plan = plan;
+        _streamEpoch = plan.streamEpoch;
         installed = true;
         _acceptErrors = true;
         await player.open(
@@ -805,6 +849,7 @@ class PlaybackSession extends ChangeNotifier {
     _player = next;
     _standby = previous;
     _plan = plan;
+    _streamEpoch = plan.streamEpoch;
     _bind();
     _openedIndex = index;
     _acceptErrors = true;
@@ -1351,6 +1396,25 @@ class PlaybackSession extends ChangeNotifier {
         final state = player.state;
         if (state.playing &&
             state.position > before + const Duration(milliseconds: 250)) {
+          final plan = _plan;
+          if (Platform.isIOS && plan != null && !plan.local) {
+            // 缓冲区里的旧数据会让位置短暂推进，但挂起期间监听可能已被回收，
+            // 缓冲耗尽后只会得到 connection refused，所以这里必须探活一次。
+            final probe = await _probeStream();
+            if (!_lifecycleRestoreValid(token, generation) || index != _index) {
+              return;
+            }
+            if (probe == _StreamProbe.dead ||
+                plan.streamEpoch != _streamEpoch) {
+              DiaryService.add(
+                '[Play] 回前台后本机取流失效，重建播放器 探活=${probe.name} '
+                '代次=${plan.streamEpoch}/$_streamEpoch',
+              );
+              _resumePosition = state.position.inMilliseconds / 1000;
+              await _rebuildAndResume(_resumePosition, true, token: token);
+              return;
+            }
+          }
           DiaryService.add('[Play] 前台原地恢复成功 位置=${state.position}');
           _resumePosition = state.position.inMilliseconds / 1000;
           _health.reset();

@@ -68,6 +68,14 @@ class AppFailure implements Exception {
   String toString() => message;
 }
 
+/// 本机取流服务状态：监听是否还能接受连接，以及当前监听代次。
+class PlaybackStreamStatus {
+  const PlaybackStreamStatus({this.alive = true, this.epoch = 0});
+
+  final bool alive;
+  final int epoch;
+}
+
 abstract class AppRepository {
   Future<ResourceSettings> resourceSettings() async => const ResourceSettings();
   Future<ResourceSettings> saveResourceSettings(
@@ -214,6 +222,10 @@ abstract class AppRepository {
   Future<PlaybackPlan> fallback(PlaybackPlan current);
   Future<void> cancelPlayback();
   Future<void> release(String session);
+
+  /// 本机取流服务探活 + 监听代次；默认实现用于测试桩与非原生仓库。
+  Future<PlaybackStreamStatus> playbackStatus() async =>
+      const PlaybackStreamStatus();
 }
 
 class NativeRepository extends AppRepository {
@@ -1207,5 +1219,14 @@ class NativeRepository extends AppRepository {
     try {
       await _call({'action': 'release', 'session': session});
     } catch (_) {}
+  }
+
+  @override
+  Future<PlaybackStreamStatus> playbackStatus() async {
+    final result = await _call({'action': 'playbackAlive'});
+    return PlaybackStreamStatus(
+      alive: result['alive'] == true,
+      epoch: intValue(result['epoch']),
+    );
   }
 }

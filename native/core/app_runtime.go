@@ -122,6 +122,7 @@ type nativePlan struct {
 	Session         string            `json:"session,omitempty"`
 	RouteIndex      int               `json:"routeIndex"`
 	RouteCount      int               `json:"routeCount"`
+	Epoch           int64             `json:"streamEpoch,omitempty"`
 }
 
 type nativeEngine struct {
@@ -146,6 +147,7 @@ type nativeEngine struct {
 	catalogSaveError    error
 	covers              *nativeCoverCache
 	stream              *nativeStreamServer
+	streamEpoch         int64
 	cast                nativeCast
 	playbacks           map[string]nativePlaybackChoice
 	playbackMu          sync.Mutex
@@ -475,6 +477,9 @@ func nativeDispatch(input nativeInput) (any, error) {
 	case "cancelPlayback":
 		engine.nativeCancelPlayback(input.Sequence)
 		return true, nil
+	case "playbackAlive":
+		alive, epoch := engine.nativePlaybackStatus()
+		return map[string]any{"alive": alive, "epoch": epoch}, nil
 	case "release":
 		engine.nativeReleasePlayback(input.Session)
 		return true, nil

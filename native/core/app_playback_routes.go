@@ -57,16 +57,8 @@ func nativePlaybackChoices(media ProviderMedia, quality int) nativePlaybackChoic
 }
 
 func (engine *nativeEngine) streamServer() (*nativeStreamServer, error) {
-	engine.mu.Lock()
-	defer engine.mu.Unlock()
-	if engine.stream == nil {
-		stream, err := newNativeStreamServer(engine.downloader)
-		if err != nil {
-			return nil, err
-		}
-		engine.stream = stream
-	}
-	return engine.stream, nil
+	stream, _, err := engine.nativeEnsureStreamLocked()
+	return stream, err
 }
 
 func (engine *nativeEngine) nativeOpenPlayback(ctx context.Context, choice nativePlaybackChoice) (nativePlan, error) {
@@ -96,11 +88,12 @@ func (engine *nativeEngine) nativeOpenPlayback(ctx context.Context, choice nativ
 		}
 		plan.ExpiresAt = media.Credentials.Expires.UnixMilli()
 	}
-	stream, err := engine.streamServer()
+	stream, epoch, err := engine.nativeEnsureStreamLocked()
 	if err != nil {
 		return nativePlan{}, err
 	}
 	plan.URL, choice.streamSession = stream.nativeOpen(media)
+	plan.Epoch = epoch
 	choice.created = time.Now()
 	engine.mu.Lock()
 	if engine.playbacks == nil {
