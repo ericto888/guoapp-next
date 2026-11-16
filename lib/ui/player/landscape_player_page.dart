@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -16,21 +17,19 @@ import '../theme/app_theme.dart';
 import '../theme/motion.dart';
 import '../widgets/contained_slider.dart';
 import '../widgets/motion/motion_widgets.dart';
-import 'cast_page.dart';
 import 'danmaku_overlay.dart';
 import '../widgets/follow_button.dart';
 import 'episode_grid.dart';
-import 'mini_player.dart';
 import 'playback_handle.dart';
 import 'playback_sheets.dart';
-import 'player_status.dart';
 import 'fade_presence.dart';
+import 'player_status.dart';
 import 'player_surface.dart';
 import 'player_video.dart';
 import 'swipe_controls.dart';
 import 'window_fullscreen.dart';
 
-enum _Panel { episodes, settings, speed, quality, fit }
+enum _Panel { episodes, settings, speed, quality }
 
 class LandscapePlayerPage extends StatefulWidget {
   const LandscapePlayerPage({
@@ -39,12 +38,10 @@ class LandscapePlayerPage extends StatefulWidget {
     required this.handle,
     this.onFullscreen,
     this.onMiniWindow,
-    this.followSensor = true,
   });
   final LocalStore store;
   final PlaybackHandle handle;
   final VoidCallback? onFullscreen;
-  final bool followSensor;
   final VoidCallback? onMiniWindow;
 
   @override
@@ -52,35 +49,43 @@ class LandscapePlayerPage extends StatefulWidget {
 }
 
 class _LandscapePlayerPageState extends State<LandscapePlayerPage>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
-  late final _tabs = TabController(length: 2, initialIndex: 1, vsync: this);
-  final _selected = <int>{};
-  final _links = {
-    _Panel.speed: LayerLink(),
-    _Panel.quality: LayerLink(),
-    _Panel.fit: LayerLink(),
-  };
+  final _links = {_Panel.speed: LayerLink(), _Panel.quality: LayerLink()};
+  late final _pages = PageController(initialPage: _session.index);
   Player? _bound;
   Timer? _hideTimer;
+
+  /// 退出全屏时先锁竖屏，等设备真正转到竖直后再恢复 auto。
+  /// 用固定 1 秒定时器会抢在系统旋转完成之前解锁，物理横持状态立刻被
+  /// 重新应用，表现为「退出全屏后又闪一次全屏」。
+  bool _rearmAfterExit = false;
   Timer? _tapTimer;
   Timer? _streakTimer;
   Timer? _clockTimer;
   Timer? _seekTimer;
   bool? _full;
   bool _visible = true;
-  bool _selecting = false;
+  bool _scrolling = false;
   bool _holding = false;
   bool _dragging = false;
   double? _seekValue;
   double? _seekTarget;
   int _streak = 0;
   int _streakTaps = 0;
+  bool _descExpanded = false;
   _Panel? _panel;
   int _sidePanelMount = 0;
   bool _sidePanelShown = false;
   DateTime _now = DateTime.now();
   ({int level, bool charging})? _battery;
+
+  static const _statusStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
 
   PlaybackSession get _session => widget.handle.session;
 
@@ -88,19 +93,13 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.onFullscreen == null && widget.followSensor) {
+    if (widget.onFullscreen == null) {
       unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
     }
     _session.addListener(_bind);
-    _tabs.addListener(_tabChanged);
     _bind();
     _scheduleHide();
   }
-
-  void _tabChanged() => setState(() {
-    _selecting = false;
-    _selected.clear();
-  });
 
   @override
   void didChangeDependencies() {
@@ -111,6 +110,15 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     _panel = null;
     _visible = true;
     _scheduleHide();
+    // 退出全屏已经落到竖屏：现在才解锁 auto，设备是竖持就不会再弹回全屏。
+    if (!full && _rearmAfterExit) {
+      _rearmAfterExit = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
+        }
+      });
+    }
     unawaited(
       SystemChrome.setEnabledSystemUIMode(
         full ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
@@ -118,6 +126,15 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     );
     _clockTimer?.cancel();
     _clockTimer = null;
+    // 横竖切换会把 PageView 挪到另一个子树，滚动位置按 initialPage 重建，
+    // 这里在布局完成后重新对齐到当前集，避免画面和实际集数不一致。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pages.hasClients) return;
+      if ((_pages.page ?? _session.index.toDouble()).round() !=
+          _session.index) {
+        _pages.jumpToPage(_session.index);
+      }
+    });
     if (full) {
       _tick();
       _clockTimer = Timer.periodic(const Duration(seconds: 20), (_) => _tick());
@@ -136,15 +153,13 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     _streakTimer?.cancel();
     _clockTimer?.cancel();
     _seekTimer?.cancel();
-    _tabs.dispose();
     if (_holding) _session.endBoost();
+    _pages.dispose();
     if (widget.onFullscreen == null) {
       if (_full == true && desktopPlatform) {
         unawaited(setWindowFullScreen(false));
       }
-      if (!widget.followSensor) {
-        unawaited(AppDevice.releaseOrientation());
-      }
+      unawaited(AppDevice.releaseOrientation());
       unawaited(
         SystemChrome.setEnabledSystemUIMode(
           SystemUiMode.edgeToEdge,
@@ -191,7 +206,45 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   }
 
   void _refresh() {
+    final page = _pages.hasClients ? _pages.page : null;
+    if (!_scrolling &&
+        !_session.advancingSeason &&
+        page != null &&
+        page.round() != _session.index &&
+        _session.index < _session.detail.episodes.length) {
+      _pages.jumpToPage(_session.index);
+    }
     if (mounted) setState(() {});
+  }
+
+  bool _scrolled(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    final metrics = notification.metrics;
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _hideTimer?.cancel();
+      if (!_scrolling) setState(() => _scrolling = true);
+    } else if (notification is ScrollEndNotification) {
+      // 只有用户真正拖动过的滚动才切集：横竖切换重建 PageView、
+      // jumpToPage 等程序化滚动同样会发 ScrollEnd，误判会导致跳回第一集。
+      final dragged = _scrolling;
+      if (_scrolling) setState(() => _scrolling = false);
+      if (!dragged) return false;
+      final page = metrics.viewportDimension <= 0
+          ? _session.index
+          : (metrics.pixels / metrics.viewportDimension).round();
+      final count = _session.detail.episodes.length;
+      if (page != _session.index && page >= 0 && page < count) {
+        // 滑动换集后隐藏播控（横屏真全屏，红果行为）。
+        _hideControls();
+        unawaited(_session.play(page));
+      } else if (page >= count && _session.nextSeason != null) {
+        // 滑过最后一集：衔接下一季第 1 集。
+        _hideControls();
+        unawaited(_session.playNextSeason());
+      }
+    }
+    return false;
   }
 
   void _tick() {
@@ -226,6 +279,11 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     _scheduleHide();
   }
 
+  void _hideControls() {
+    _hideTimer?.cancel();
+    if (_visible) setState(() => _visible = false);
+  }
+
   void _toggleControls() {
     if (_visible && !_pinned) {
       _hideTimer?.cancel();
@@ -236,10 +294,19 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   }
 
   void _tapUp(TapUpDetails details, double width, bool full) {
+    if (!full) {
+      // 竖屏手持横片：单击视频 = 暂停/播放（红果行为）。
+      _session.togglePlayback();
+      return;
+    }
+    // 手机/平板全屏横屏：左右 1/4 区域双击快退/快进，中间双击暂停。
+    // 桌面端保持双击暂停（设置项只在手机、平板展示）。
+    final seek =
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS) &&
+        _session.store.playbackPreferences.doubleTapSeek;
     final x = details.localPosition.dx;
-    final side =
-        !full && widget.onFullscreen == null ||
-            !_session.store.playbackPreferences.doubleTapSeek
+    final side = !seek
         ? 0
         : x < width / 4
         ? -1
@@ -252,13 +319,16 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     }
     if (_tapTimer?.isActive ?? false) {
       _tapTimer!.cancel();
+      // 双击：中间 → 暂停/恢复 + 切控制条；左右 → 快进/快退
       if (side == 0) {
         _session.togglePlayback();
-      } else {
-        _startStreak(side);
       }
+      _toggleControls();
+      if (side != 0) _startStreak(side);
       return;
     }
+    // 单击：只切控制条显示/隐藏，不暂停（红果行为）。
+    // 单击左右区域留给双击快进快退。
     _tapTimer = Timer(const Duration(milliseconds: 300), _toggleControls);
   }
 
@@ -317,12 +387,23 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   }
 
   void _rotate(bool full) => unawaited(
-    desktopPlatform
-        ? setWindowFullScreen(!full)
-        : AppDevice.setPlayerOrientation(
-            full ? PlayerOrientation.portrait : PlayerOrientation.landscape,
-          ),
+    desktopPlatform ? setWindowFullScreen(!full) : _rotateMobile(full),
   );
+
+  /// 移动端旋转切换。
+  /// 退出全屏必须先强制竖屏：若只设回 auto，物理横持设备（自动横屏进入的
+  /// 全屏）画面不会变化，返回按钮看起来失灵。
+  /// 恢复 auto 的时机不能靠定时器猜：等 [didChangeDependencies] 观察到画面
+  /// 已经变成竖直再解锁，否则系统旋转还没完成就解锁会把横屏状态再应用一次。
+  Future<void> _rotateMobile(bool full) async {
+    if (full) {
+      _rearmAfterExit = true;
+      await AppDevice.setPlayerOrientation(PlayerOrientation.portrait);
+      return;
+    }
+    _rearmAfterExit = false;
+    await AppDevice.setPlayerOrientation(PlayerOrientation.landscape);
+  }
 
   void _back(bool full) {
     if (_panel != null) {
@@ -330,8 +411,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       _scheduleHide();
     } else if (full) {
       _rotate(true);
-    } else if (_selecting) {
-      _select(false);
     }
   }
 
@@ -344,11 +423,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     setState(() => _panel = null);
     _scheduleHide();
   }
-
-  void _select(bool selecting) => setState(() {
-    _selecting = selecting;
-    _selected.clear();
-  });
 
   void _saveFailed() {
     if (!mounted) return;
@@ -376,19 +450,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     });
   }
 
-  bool get _canDownload =>
-      AppScope.of(context).repository.supportsDownloads &&
-      widget.store.canDownload;
-
-  void _download() {
-    final detail = _session.detail;
-    final episodes = [
-      for (final index in _selected.toList()..sort()) detail.episodes[index],
-    ];
-    _select(false);
-    unawaited(downloadEpisodes(context, widget.store, detail, episodes));
-  }
-
   @override
   Widget build(BuildContext context) {
     final full = MediaQuery.orientationOf(context) == Orientation.landscape;
@@ -399,7 +460,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       child: Builder(builder: (context) => _video(context, full)),
     );
     return PopScope(
-      canPop: !full && !_selecting && _panel == null,
+      canPop: !full && _panel == null,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _back(full);
       },
@@ -413,19 +474,17 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
         child: full
             ? Scaffold(backgroundColor: Colors.black, body: video)
             : Scaffold(
-                backgroundColor: theme.colorScheme.surface,
-                body: Column(
-                  children: [
-                    ColoredBox(
-                      color: Colors.black,
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: MediaQuery.paddingOf(context).top,
-                      ),
-                    ),
-                    AspectRatio(aspectRatio: 16 / 9, child: video),
-                    Expanded(child: _details(context)),
-                  ],
+                backgroundColor: Colors.black,
+                body: Theme(
+                  data: dark,
+                  child: Column(
+                    children: [
+                      _appBar(context),
+                      // 整块区域（视频 + 信息流）都在 PageView 里，整屏上下滑。
+                      Expanded(child: video),
+                      _episodeBar(context),
+                    ],
+                  ),
                 ),
               ),
       ),
@@ -444,31 +503,17 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     return Stack(
       fit: StackFit.expand,
       children: [
-        PlayerVideo(
-          key: ValueKey(session.player),
-          handle: widget.handle,
-          player: session.player,
-          fit: session.videoFit,
-        ),
-        DanmakuOverlay(
-          controller: session.danmaku,
-          video: session.videoSize,
-          fit: session.videoFit,
-          style: session.danmakuStyle,
-        ),
-        SwipeControls(
-          session: session,
-          enabled: full,
-          levels: session.store.playbackPreferences.swipeLevels,
-          episodes: session.store.playbackPreferences.swipeEpisodes,
-          child: LayoutBuilder(
-            builder: (context, constraints) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapUp: (details) => _tapUp(details, constraints.maxWidth, full),
-              onLongPressStart: (_) => _pressStart(),
-              onLongPressEnd: (_) => _pressEnd(),
-              onLongPressCancel: _pressEnd,
-            ),
+        NotificationListener<ScrollNotification>(
+          onNotification: _scrolled,
+          child: PageView.builder(
+            controller: _pages,
+            scrollDirection: Axis.vertical,
+            itemCount:
+                session.detail.episodes.length +
+                (session.nextSeason != null ? 1 : 0),
+            itemBuilder: (context, index) => full
+                ? _episode(context, index, full)
+                : _pageContent(context, index),
           ),
         ),
         FadePresence(
@@ -494,17 +539,18 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           scaleFrom: .9,
           child: _streak != 0 ? _streakBadge(full) : null,
         ),
-        IgnorePointer(
-          ignoring: !visible,
-          child: AnimatedOpacity(
-            opacity: visible ? 1 : 0,
-            duration: const Duration(milliseconds: 180),
-            child: Listener(
-              onPointerDown: (_) => _scheduleHide(),
-              child: full ? _fullControls(context) : _miniControls(context),
+        if (full)
+          IgnorePointer(
+            ignoring: !visible,
+            child: AnimatedOpacity(
+              opacity: visible ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: Listener(
+                onPointerDown: (_) => _scheduleHide(),
+                child: _fullControls(context),
+              ),
             ),
           ),
-        ),
         if (full && !visible && session.store.playbackPreferences.progressLine)
           Positioned(
             left: 0,
@@ -523,6 +569,19 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                 : null,
           ),
         ),
+        // 竖屏手持横片：拖动底部进度条时在进度条上方显示目标时间。
+        if (!full)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 44,
+            child: FadePresence(
+              scaleFrom: .9,
+              child: _dragging
+                  ? IgnorePointer(child: Center(child: _seekBubble()))
+                  : null,
+            ),
+          ),
         if (session.saveWarning case final warning?)
           Positioned(
             left: 12,
@@ -577,90 +636,192 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     );
   }
 
-  bool _sidePanel(_Panel panel) =>
-      panel == _Panel.episodes || panel == _Panel.settings;
+  /// 最后一集之后的一页：继续上滑衔接下一季。
+  Widget _nextSeasonPage(BuildContext context) {
+    final season = _session.nextSeason;
+    if (season == null) return const SizedBox.shrink();
+    final advancing = _session.advancingSeason;
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 12,
+          children: [
+            Text(
+              season.label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (season.drama.episodes > 0)
+              Text(
+                '共 ${season.drama.episodes} 集',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .72),
+                  fontSize: 13,
+                ),
+              ),
+            if (advancing) const CircularProgressIndicator(),
+            Text(
+              advancing ? '正在加载${season.label}' : '继续上滑播放${season.label}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .64),
+                fontSize: 13,
+              ),
+            ),
+            if (!advancing)
+              FilledButton(
+                onPressed: () => unawaited(_session.playNextSeason()),
+                child: Text('播放${season.label}'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
-  Widget _miniControls(BuildContext context) {
+  /// 全屏视频表面：auto 档沿用默认 contain 铺满区域，其他画面比例档位
+  /// 按 [VideoFit.size] 计算显示尺寸后居中放置。
+  Widget _videoSurface(PlaybackSession session, Player player) {
+    final fit = session.videoFit;
+    final video = session.videoSize;
+    if (fit == VideoFit.auto || video == null) {
+      return PlayerVideo(
+        key: ValueKey(player),
+        handle: widget.handle,
+        player: player,
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final box = constraints.biggest;
+        final size = box.isFinite && !box.isEmpty
+            ? fit.size(box, video, MediaQuery.devicePixelRatioOf(context))
+            : box;
+        return OverflowBox(
+          alignment: Alignment.center,
+          maxWidth: double.infinity,
+          maxHeight: double.infinity,
+          child: SizedBox(
+            width: size.width,
+            height: size.height,
+            child: PlayerVideo(
+              key: ValueKey(player),
+              handle: widget.handle,
+              player: player,
+              fit: VideoFit.stretch,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _episode(BuildContext context, int index, bool full) {
     final session = _session;
+    if (index >= session.detail.episodes.length) {
+      return _nextSeasonPage(context);
+    }
+    final current = index == session.index;
+    final player = current
+        ? session.player
+        : index == session.standbyIndex
+        ? session.standby
+        : null;
+    final width = MediaQuery.sizeOf(context).width;
     return Stack(
       fit: StackFit.expand,
       children: [
-        const IgnorePointer(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: _Shade(height: 64, top: true),
-          ),
-        ),
-        const IgnorePointer(
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: _Shade(height: 96, top: false),
-          ),
-        ),
-        Positioned(
-          left: 4,
-          right: 4,
-          top: 0,
-          height: 48,
-          child: Row(
-            children: [
-              _icon(
-                Icons.arrow_back_rounded,
-                '返回',
-                () => unawaited(Navigator.maybePop(context)),
+        if (player != null)
+          _videoSurface(session, player)
+        else
+          IgnorePointer(
+            child: Center(
+              child: Text(
+                '第 ${session.detail.episodes[index].number} 集',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .72),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const Spacer(),
-              if (widget.onMiniWindow case final onMiniWindow?)
-                _icon(Icons.picture_in_picture_alt_rounded, '小窗', onMiniWindow),
-              _icon(Icons.settings_rounded, '播放设置', _openSettings),
-            ],
+            ),
           ),
-        ),
-        Positioned(
-          left: 4,
-          right: 4,
-          bottom: 4,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Transform.translate(
-                offset: const Offset(0, 7),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: SizedBox(
-                    height: 20,
-                    child: _progress(context, thumb: 6),
+        if (current) ...[
+          DanmakuOverlay(
+            controller: session.danmaku,
+            video: session.videoSize,
+            fit: session.videoFit,
+            style: session.danmakuStyle,
+          ),
+          SwipeControls(
+            session: session,
+            enabled: full,
+            levels: full && session.store.playbackPreferences.swipeLevels,
+            // 中间区域的上下滑用于翻集，左右两侧仍调节亮度/音量。
+            verticalRegion: session.detail.episodes.length > 1
+                ? (position) =>
+                      position.dx < width * .18 || position.dx > width * .82
+                : null,
+            child: LayoutBuilder(
+              builder: (context, constraints) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (details) =>
+                    _tapUp(details, constraints.maxWidth, full),
+                onLongPressStart: (_) => _pressStart(),
+                onLongPressEnd: (_) => _pressEnd(),
+                onLongPressCancel: _pressEnd,
+              ),
+            ),
+          ),
+          // 放在 SwipeControls 之后：Stack 后绘制的子节点先命中，
+          // 否则按钮会被 SwipeControls 的 opaque GestureDetector 吞掉点击。
+          // 播放中忽略指针，避免透明按钮挡住滑动/单击。
+          Center(
+            child: IgnorePointer(
+              ignoring: !(session.ready && session.paused),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: session.togglePlayback,
+                child: AnimatedOpacity(
+                  opacity: session.ready && session.paused ? 1 : 0,
+                  duration: Motion.of(context, Motion.short),
+                  curve: Motion.standard,
+                  child: AnimatedScale(
+                    scale: session.ready && session.paused ? 1 : .8,
+                    duration: Motion.of(context, Motion.short),
+                    curve: Motion.enter,
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: .35),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        size: 44,
+                        color: Colors.white.withValues(alpha: .9),
+                      ),
+                    ),
                   ),
                 ),
               ),
-              SizedBox(
-                height: 44,
-                child: Row(
-                  children: [
-                    _playButton(size: 40, iconSize: 26),
-                    const SizedBox(width: 4),
-                    _clock(13),
-                    const Spacer(),
-                    if (session.danmakuSupported) _danmakuButton(context),
-                    _icon(
-                      Icons.fullscreen_rounded,
-                      '全屏',
-                      widget.onFullscreen ?? () => _rotate(false),
-                      size: 40,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
 
+  bool _sidePanel(_Panel panel) =>
+      panel == _Panel.episodes || panel == _Panel.settings;
+
   Widget _fullControls(BuildContext context) {
     final session = _session;
-    final preferences = session.store.playbackPreferences;
     final padding = MediaQuery.viewPaddingOf(context);
     final left = math.max(padding.left, 20.0);
     final right = math.max(padding.right, 20.0);
@@ -726,30 +887,19 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                 extent: 44,
               ),
               const SizedBox(width: 8),
-              if (preferences.showNetworkSpeed) ...[
-                NetworkSpeedText(
-                  session: session,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: .78),
-                    fontSize: 12,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(width: 12),
-              ],
               if (_battery case final battery?) ...[
                 _batteryMark(battery),
                 const SizedBox(width: 12),
               ],
-              if (preferences.showClock)
+              if (session.store.playbackPreferences.showNetworkSpeed)
+                NetworkSpeedText(session: session, style: _statusStyle),
+              if (session.store.playbackPreferences.showNetworkSpeed &&
+                  session.store.playbackPreferences.showClock)
+                const SizedBox(width: 12),
+              if (session.store.playbackPreferences.showClock)
                 Text(
                   '${_two(_now.hour)}:${_two(_now.minute)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
+                  style: _statusStyle,
                 ),
               const SizedBox(width: 4),
               if (session.danmakuSupported) _danmakuButton(context),
@@ -819,17 +969,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                   '倍速',
                   ready ? () => _openPanel(_Panel.speed) : null,
                   bold: true,
-                ),
-              ),
-              CompositedTransformTarget(
-                link: _links[_Panel.fit]!,
-                child: _icon(
-                  Icons.aspect_ratio_rounded,
-                  '画面比例 · ${session.videoFit.label}',
-                  () => _openPanel(_Panel.fit),
-                  color: session.videoFit == VideoFit.auto
-                      ? null
-                      : Theme.of(context).colorScheme.primary,
                 ),
               ),
               _icon(Icons.fullscreen_exit_rounded, '退出全屏', () => _rotate(true)),
@@ -933,7 +1072,15 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
         builder: (context) => _progressBar(context, thumb: thumb),
       );
 
-  Widget _progressBar(BuildContext context, {required double thumb}) {
+  Widget _progressBar(
+    BuildContext context, {
+    required double thumb,
+    double track = 3,
+    Color? active,
+    Color? inactive,
+    Color? buffered,
+    Color? thumbColor,
+  }) {
     final session = _session;
     final state = session.player.state;
     final duration = state.duration;
@@ -946,12 +1093,13 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     final colors = Theme.of(context).colorScheme;
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
-        trackHeight: 3,
+        trackHeight: track,
         padding: EdgeInsets.zero,
-        activeTrackColor: colors.primary,
-        thumbColor: colors.primary,
-        inactiveTrackColor: Colors.white.withValues(alpha: .25),
-        secondaryActiveTrackColor: Colors.white.withValues(alpha: .4),
+        activeTrackColor: active ?? colors.primary,
+        thumbColor: thumbColor ?? colors.primary,
+        inactiveTrackColor: inactive ?? Colors.white.withValues(alpha: .25),
+        secondaryActiveTrackColor:
+            buffered ?? Colors.white.withValues(alpha: .4),
         thumbShape: RoundSliderThumbShape(enabledThumbRadius: thumb),
         overlayShape: SliderComponentShape.noOverlay,
         trackShape: const RoundedRectSliderTrackShape(),
@@ -1059,14 +1207,14 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       color: Colors.black.withValues(alpha: .5),
       borderRadius: BorderRadius.circular(16),
     ),
-    child: Row(
+    child: const Row(
       mainAxisSize: MainAxisSize.min,
       spacing: 6,
       children: [
-        const Icon(Icons.fast_forward_rounded, size: 16, color: Colors.white),
+        Icon(Icons.fast_forward_rounded, size: 16, color: Colors.white),
         Text(
-          '${_session.store.playbackPreferences.boostLabel}播放中',
-          style: const TextStyle(
+          '2 倍速播放中',
+          style: TextStyle(
             color: Colors.white,
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -1075,6 +1223,35 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       ],
     ),
   );
+
+  /// 拖动进度条时显示的目标时间气泡（红果样式）。
+  Widget _seekBubble() {
+    final value = _seekValue ?? 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text.rich(
+        TextSpan(
+          text: formatClock(Duration(milliseconds: value.round())),
+          children: [
+            TextSpan(
+              text: ' / ${formatClock(_session.player.state.duration)}',
+              style: TextStyle(color: Colors.white.withValues(alpha: .6)),
+            ),
+          ],
+        ),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
 
   Widget _batteryMark(({int level, bool charging}) battery) {
     const levels = [
@@ -1142,7 +1319,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     final colors = Theme.of(context).colorScheme;
     final right = MediaQuery.viewPaddingOf(context).right;
     final session = _session;
-    final episodes = panel == _Panel.episodes;
+    final isEpisodes = panel == _Panel.episodes;
+    final isSettings = panel == _Panel.settings;
     return Material(
       color: colors.surfaceContainerLow.withValues(alpha: .94),
       child: Padding(
@@ -1152,10 +1330,17 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           children: [
             SheetHeader(
               children: [
-                Text(episodes ? '选集' : '播放设置', style: sheetTitle),
+                Text(
+                  isEpisodes
+                      ? '选集'
+                      : isSettings
+                      ? '播放设置'
+                      : '',
+                  style: sheetTitle,
+                ),
                 Expanded(
                   child: Text(
-                    episodes ? '共 ${session.detail.episodes.length} 集' : '',
+                    isEpisodes ? '共 ${session.detail.episodes.length} 集' : '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1172,7 +1357,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
               ],
             ),
             Expanded(
-              child: episodes
+              child: isEpisodes
                   ? EpisodeGrid(
                       episodes: session.detail.episodes,
                       current: session.index,
@@ -1187,16 +1372,119 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                         }
                       },
                     )
-                  : PlaybackSettingsList(
-                      session: session,
-                      onFailure: _saveFailed,
-                      onCast: () {
-                        _closePanel();
-                        unawaited(startCast(context, session));
-                      },
-                    ),
+                  : _settingsContent(context),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _settingsContent(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final session = _session;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '播放速度',
+            style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: playbackSpeeds.reversed
+                .map(
+                  (speed) => _settingChip<double>(
+                    value: speed,
+                    selected: session.speed == speed,
+                    label: '${speed}x',
+                    onTap: () => _change(() => session.setSpeed(speed)),
+                  ),
+                )
+                .toList(),
+          ),
+          if (session.qualities.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text(
+              '画质',
+              style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ...session.qualities.map(
+                  (q) => _settingChip<int>(
+                    value: q,
+                    selected: session.quality == q,
+                    label: '${q}P',
+                    onTap: () => _change(() => session.setQuality(q)),
+                  ),
+                ),
+                _settingChip<int>(
+                  value: 0,
+                  selected: session.quality == 0,
+                  label: '自动',
+                  onTap: () => _change(() => session.setQuality(0)),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 20),
+          Text(
+            '画面比例',
+            style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final fit in VideoFit.values)
+                _settingChip<VideoFit>(
+                  value: fit,
+                  selected: session.videoFit == fit,
+                  label: fit.label,
+                  onTap: () => _change(() => session.setVideoFit(fit)),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingChip<T>({
+    required T value,
+    required bool selected,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? colors.primary : colors.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? colors.primary : colors.outlineVariant,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: selected ? colors.onPrimary : colors.onSurface,
+          ),
         ),
       ),
     );
@@ -1209,26 +1497,19 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.all(6),
-        child: switch (panel) {
-          _Panel.speed => _options<double>(
-            values: playbackSpeeds.reversed.toList(),
-            selected: session.speed,
-            label: (value) => '${value}x',
-            onSelected: (value) => _change(() => session.setSpeed(value)),
-          ),
-          _Panel.fit => _options<VideoFit>(
-            values: VideoFit.values,
-            selected: session.videoFit,
-            label: (value) => value.label,
-            onSelected: (value) => _change(() => session.setVideoFit(value)),
-          ),
-          _ => _options<int>(
-            values: [...session.qualities, 0],
-            selected: session.quality,
-            label: (value) => value == 0 ? '自动' : '${value}P',
-            onSelected: (value) => _change(() => session.setQuality(value)),
-          ),
-        },
+        child: panel == _Panel.speed
+            ? _options<double>(
+                values: playbackSpeeds.reversed.toList(),
+                selected: session.speed,
+                label: (value) => '${value}x',
+                onSelected: (value) => _change(() => session.setSpeed(value)),
+              )
+            : _options<int>(
+                values: [...session.qualities, 0],
+                selected: session.quality,
+                label: (value) => value == 0 ? '自动' : '${value}P',
+                onSelected: (value) => _change(() => session.setQuality(value)),
+              ),
       ),
     );
   }
@@ -1274,62 +1555,296 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     );
   }
 
-  Widget _details(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return SafeArea(
-      top: false,
-      child: Column(
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: colors.outlineVariant)),
-            ),
-            child: SizedBox(
-              height: 48,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final (index, label) in const ['简介', '选集'].indexed)
-                        Expanded(child: _tabButton(context, index, label)),
-                    ],
+  Widget _appBar(BuildContext context) {
+    final session = _session;
+    final padding = MediaQuery.paddingOf(context);
+    return ColoredBox(
+      color: Colors.black,
+      child: Padding(
+        padding: EdgeInsets.only(top: padding.top),
+        child: SizedBox(
+          height: 52,
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: () => unawaited(Navigator.maybePop(context)),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                color: Colors.white,
+                tooltip: '返回',
+              ),
+              Text(
+                '第 ${session.episode.number} 集',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _openSettings,
+                icon: const Icon(Icons.speed_rounded, size: 18),
+                label: Text('${_speedLabel(session.speed)}x'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
-                  IgnorePointer(
-                    child: AnimatedBuilder(
-                      animation: _tabs.animation!,
-                      builder: (context, child) => Align(
-                        alignment: Alignment(_tabs.animation!.value * 2 - 1, 1),
-                        child: child,
-                      ),
-                      child: FractionallySizedBox(
-                        widthFactor: .5,
-                        child: Center(
-                          heightFactor: 1,
-                          child: Container(
-                            width: 32,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: colors.primary,
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(3),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                ),
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                tooltip: '更多',
+                onSelected: (value) {
+                  if (value == 'settings') {
+                    unawaited(_openSettings());
+                  } else if (value == 'mini') {
+                    widget.onMiniWindow?.call();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'settings', child: Text('播放设置')),
+                  if (widget.onMiniWindow != null)
+                    const PopupMenuItem(value: 'mini', child: Text('小窗播放')),
                 ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _speedLabel(double speed) => speed == speed.roundToDouble()
+      ? speed.toStringAsFixed(0)
+      : speed.toString();
+
+  Widget _fullscreenPill() => Material(
+    color: Colors.white.withValues(alpha: .18),
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: widget.onFullscreen ?? () => _rotate(false),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 4,
+          children: [
+            Icon(Icons.fullscreen_rounded, size: 16, color: Colors.white),
+            Text(
+              '全屏观看',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  /// 竖屏手持横片的视频表面：auto 档保持 16:9 居中黑边的刻意布局，
+  /// 其他档位在视频区内按 [VideoFit.size] 重算显示尺寸居中放置。
+  Widget _heldVideoSurface(PlaybackSession session, Player player, Size box) {
+    final fit = session.videoFit;
+    final video = session.videoSize;
+    if (fit == VideoFit.auto || video == null || box.isEmpty) {
+      return PlayerVideo(
+        key: ValueKey(player),
+        handle: widget.handle,
+        player: player,
+      );
+    }
+    final size = fit.size(box, video, MediaQuery.devicePixelRatioOf(context));
+    return OverflowBox(
+      alignment: Alignment.center,
+      maxWidth: double.infinity,
+      maxHeight: double.infinity,
+      child: SizedBox(
+        width: size.width,
+        height: size.height,
+        child: PlayerVideo(
+          key: ValueKey(player),
+          handle: widget.handle,
+          player: player,
+          fit: VideoFit.stretch,
+        ),
+      ),
+    );
+  }
+
+  /// 竖屏手持时的一页：视频垂直居中，信息流贴底。
+  /// 整页都在 PageView 里，所以手指放在任何位置上下滑都能换集。
+  Widget _pageContent(BuildContext context, int index) {
+    final session = _session;
+    if (index >= session.detail.episodes.length) {
+      return _nextSeasonPage(context);
+    }
+    final current = index == session.index;
+    final player = current
+        ? session.player
+        : index == session.standbyIndex
+        ? session.standby
+        : null;
+    return ColoredBox(
+      color: Colors.black,
+      child: Column(
+        children: [
+          Expanded(
+            flex: 3,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // 用显式宽度算 16:9 高度：AspectRatio 单独放在 Column
+                // (mainAxisSize: min) 里会被算成 0 高度，所以外面套 SizedBox。
+                final maxWidth = constraints.maxWidth;
+                final maxHeight = constraints.maxHeight;
+                final videoHeight = math.min(
+                  maxWidth * 9 / 16,
+                  maxHeight * .78,
+                );
+                return Align(
+                  // 视频整体偏下：上方留更多黑边，贴近红果的排版。
+                  alignment: const Alignment(0, .8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: maxWidth,
+                        height: videoHeight,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (player != null)
+                              _heldVideoSurface(
+                                session,
+                                player,
+                                Size(maxWidth, videoHeight),
+                              )
+                            else
+                              IgnorePointer(
+                                child: Center(
+                                  child: Text(
+                                    '第 ${session.detail.episodes[index].number} 集',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: .72,
+                                      ),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (current) ...[
+                              DanmakuOverlay(
+                                controller: session.danmaku,
+                                video: session.videoSize,
+                                fit: session.videoFit,
+                                style: session.danmakuStyle,
+                              ),
+                              IgnorePointer(
+                                // 外层 Stack 是 StackFit.expand，直接放 Container 会被
+                                // 紧约束拉成整个视频大小（圆形遮罩巨大），用 Center 撑住。
+                                child: Center(
+                                  child: AnimatedScale(
+                                    duration: Motion.short,
+                                    scale: session.paused ? 1 : .8,
+                                    child: AnimatedOpacity(
+                                      duration: Motion.short,
+                                      opacity: session.paused ? 1 : 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(14),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(
+                                            alpha: .45,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.play_arrow_rounded,
+                                          color: Colors.white,
+                                          size: 48,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SwipeControls(
+                                session: session,
+                                enabled: false,
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) =>
+                                      GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTapUp: (details) => _tapUp(
+                                          details,
+                                          constraints.maxWidth,
+                                          false,
+                                        ),
+                                        onLongPressStart: (_) => _pressStart(),
+                                        onLongPressEnd: (_) => _pressEnd(),
+                                        onLongPressCancel: _pressEnd,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _fullscreenPill(),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabs,
-              physics: _selecting ? const NeverScrollableScrollPhysics() : null,
-              children: [_intro(context), _episodes(context)],
+          // _feed 内部是「全 Positioned 子节点」的 Stack，必须由 Expanded
+          // 给出有限高度约束；否则 Column 传无限高度 → Stack 尺寸无穷大，
+          // 把上面的视频区挤成 0 高度（视频不显示）。
+          Expanded(flex: 2, child: _feed(context)),
+          // 底部进度条：所有页都占位（非当前页只隐藏不裁剪布局）。
+          // 若用 if (current) 条件渲染，滑动换集完成瞬间进度条突然插入，
+          // Column 里 Expanded 重新分配高度，整页内容会跳动一下。
+          AnimatedOpacity(
+            opacity: current && !_scrolling ? 1 : 0,
+            duration: Motion.short,
+            child: IgnorePointer(
+              ignoring: !current,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+                child: PlaybackProgressBuilder(
+                  player: _session.player,
+                  builder: (context) {
+                    // 红果样式：细白线。播放时整体压低对比度，暂停时高亮，
+                    // 暂停态圆点略大，方便拖动。
+                    final paused = _session.paused;
+                    return SizedBox(
+                      height: 22,
+                      child: _progressBar(
+                        context,
+                        thumb: paused ? 4 : 3,
+                        track: 2,
+                        active: Colors.white.withValues(alpha: paused ? 1 : .4),
+                        inactive: Colors.white.withValues(
+                          alpha: paused ? .32 : .16,
+                        ),
+                        buffered: Colors.white.withValues(
+                          alpha: paused ? .45 : .25,
+                        ),
+                        thumbColor: Colors.white.withValues(
+                          alpha: paused ? 1 : .55,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         ],
@@ -1337,177 +1852,269 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     );
   }
 
-  Widget _tabButton(BuildContext context, int index, String label) {
-    final colors = Theme.of(context).colorScheme;
-    final selected = _tabs.index == index;
-    return Semantics(
-      selected: selected,
-      child: InkWell(
-        onTap: () {
-          if (_selecting) _select(false);
-          _tabs.animateTo(
-            index,
-            duration: Motion.of(context, Motion.long),
-            curve: Motion.standard,
-          );
-        },
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? colors.primary : colors.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _intro(BuildContext context) {
+  Widget _feed(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final session = _session;
     final drama = session.detail.drama;
+    final description = drama.description.trim();
+    // 集数已并到下面一行，这里只保留来源/状态/分类。
     final meta = [
       SourceSite.byId(drama.source).name,
-      '共 ${session.detail.episodes.length} 集',
       if (drama.releaseLabel != '状态未知') drama.releaseLabel,
       if (drama.category.isNotEmpty) drama.category,
     ];
-    final description = drama.description.trim();
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return Stack(
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Positioned.fill(
+          // 信息流底部对齐：内容贴住下方进度条（红果排版），
+          // 内容过长时仍从顶部开始滚动。
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 84, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 剧名只做展示，不响应点击。
+                  Text(
+                    drama.title,
+                    style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      height: 1.35,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    meta.join(' · '),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // 集数与简介合并成一行（红果排版）。
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '第 ${session.episode.number} 集',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' | ',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant.withValues(
+                                    alpha: .5,
+                                  ),
+                                ),
+                              ),
+                              TextSpan(
+                                text: description.isEmpty
+                                    ? '暂无简介'
+                                    : description,
+                              ),
+                            ],
+                          ),
+                          maxLines: _descExpanded ? null : 1,
+                          overflow: _descExpanded
+                              ? null
+                              : TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.5,
+                            color: description.isEmpty
+                                ? colors.onSurfaceVariant
+                                : colors.onSurface,
+                          ),
+                        ),
+                      ),
+                      if (description.length > 20)
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _descExpanded = !_descExpanded),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.only(left: 8),
+                            minimumSize: const Size(0, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(_descExpanded ? '收起' : '展开'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // 侧边操作栏随信息流一起底部对齐。
+        Positioned(bottom: 8, right: 4, child: _rail(context)),
+      ],
+    );
+  }
+
+  Widget _rail(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final session = _session;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (session.danmakuSupported) ...[
+          IconButton(
+            onPressed: () => _change(session.toggleDanmaku),
+            icon: ToggleIconSwitcher(
+              child: Icon(
+                session.danmakuEnabled
+                    ? Icons.subtitles_rounded
+                    : Icons.subtitles_off_rounded,
+                key: ValueKey(session.danmakuEnabled),
+              ),
+            ),
+            iconSize: 24,
+            tooltip: session.danmakuEnabled ? '关闭弹幕' : '打开弹幕',
+            color: session.danmakuEnabled
+                ? colors.primary
+                : colors.onSurfaceVariant,
+          ),
+          Text(
+            '弹幕',
+            style: TextStyle(
+              fontSize: 11,
+              color: session.danmakuEnabled
+                  ? colors.primary
+                  : colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+        ],
+        FollowIcon(
+          store: widget.store,
+          drama: session.detail.drama,
+          color: colors.onSurfaceVariant,
+          activeColor: colors.primary,
+          size: 26,
+        ),
+        Text(
+          '收藏',
+          style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 6),
+        IconButton(
+          onPressed: _share,
+          icon: const Icon(Icons.share_outlined, size: 24),
+          color: colors.onSurfaceVariant,
+          tooltip: '分享',
+        ),
+        Text(
+          '分享',
+          style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _share() async {
+    final drama = _session.detail.drama;
+    await Clipboard.setData(
+      ClipboardData(
+        text: '${drama.title}（${SourceSite.byId(drama.source).name}）',
+      ),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制剧名，可粘贴分享')));
+  }
+
+  Widget _episodeBar(BuildContext context) {
+    final count = _session.detail.episodes.length;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+        child: Row(
           children: [
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  drama.title,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
+              child: SizedBox(
+                height: 48,
+                child: Material(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(12),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => unawaited(_openEpisodes()),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Row(
+                        spacing: 8,
+                        children: [
+                          const Text(
+                            '选集',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              '共 $count 集 · 免费观看',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withValues(alpha: .6),
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.keyboard_arrow_up_rounded,
+                            size: 20,
+                            color: Colors.white.withValues(alpha: .6),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-            Transform.translate(
-              offset: const Offset(8, 0),
-              child: FollowIcon(
-                store: widget.store,
-                drama: drama,
-                color: colors.onSurfaceVariant,
-                activeColor: colors.primary,
-                extent: 44,
+            const SizedBox(width: 8),
+            SizedBox.square(
+              dimension: 48,
+              child: Material(
+                color: const Color(0xFF1C1C1E),
+                borderRadius: BorderRadius.circular(12),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => unawaited(_openSettings()),
+                  child: const Icon(
+                    Icons.tune_rounded,
+                    size: 22,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
-        Text(
-          meta.join(' · '),
-          style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          description.isEmpty ? '暂无简介' : description,
-          style: TextStyle(
-            fontSize: 14,
-            height: 1.6,
-            color: description.isEmpty
-                ? colors.onSurfaceVariant
-                : colors.onSurface,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _episodes(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final session = _session;
-    final episodes = session.detail.episodes;
-    final drama = session.detail.drama;
-    final all = _selected.length == episodes.length;
-    final status = drama.releaseLabel == '状态未知'
-        ? ''
-        : '${drama.releaseLabel} · ';
-    final header = SizedBox(
-      height: 48,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 4, 0),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _selecting
-                    ? '已选 ${_selected.length} 集'
-                    : '$status共 ${episodes.length} 集',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
-              ),
-            ),
-            if (_canDownload && !_selecting)
-              IconButton(
-                onPressed: () => _select(true),
-                icon: const Icon(Icons.download_rounded),
-                tooltip: '下载选集',
-              ),
           ],
         ),
       ),
     );
-    return Column(
-      children: [
-        Expanded(
-          child: EpisodeGrid(
-            header: header,
-            episodes: episodes,
-            current: session.index,
-            selecting: _selecting,
-            selected: _selected,
-            touch: true,
-            onSelectionChanged: () => setState(() {}),
-            onPick: (index) {
-              if (index != session.index) unawaited(session.play(index));
-            },
-          ),
-        ),
-        if (_selecting)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Row(
-              spacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => _select(false),
-                  child: const Text('取消'),
-                ),
-                TextButton(
-                  onPressed: () => setState(() {
-                    all
-                        ? _selected.clear()
-                        : _selected.addAll(
-                            List.generate(episodes.length, (i) => i),
-                          );
-                  }),
-                  child: Text(all ? '取消全选' : '全选'),
-                ),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed: _selected.isEmpty ? null : _download,
-                  icon: const Icon(Icons.download_rounded, size: 18),
-                  label: const Text('下载'),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
   }
+
+  Future<void> _openEpisodes() => showPlayerSheet(
+    context,
+    (_) => _EpisodeSheet(session: _session, store: widget.store),
+    dark: false,
+  );
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');
@@ -1531,4 +2138,134 @@ class _Shade extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _EpisodeSheet extends StatefulWidget {
+  const _EpisodeSheet({required this.session, required this.store});
+  final PlaybackSession session;
+  final LocalStore store;
+
+  @override
+  State<_EpisodeSheet> createState() => _EpisodeSheetState();
+}
+
+class _EpisodeSheetState extends State<_EpisodeSheet> {
+  final _selected = <int>{};
+  bool _selecting = false;
+
+  PlaybackSession get _session => widget.session;
+
+  bool get _canDownload =>
+      AppScope.of(context).repository.supportsDownloads &&
+      widget.store.canDownload;
+
+  void _select(bool selecting) => setState(() {
+    _selecting = selecting;
+    _selected.clear();
+  });
+
+  void _download() {
+    final detail = _session.detail;
+    final episodes = [
+      for (final index in _selected.toList()..sort()) detail.episodes[index],
+    ];
+    _select(false);
+    unawaited(downloadEpisodes(context, widget.store, detail, episodes));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final session = _session;
+    final episodes = session.detail.episodes;
+    final drama = session.detail.drama;
+    final all = _selected.length == episodes.length;
+    final status = drama.releaseLabel == '状态未知'
+        ? ''
+        : '${drama.releaseLabel} · ';
+    return PopScope(
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _select(false);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetHeader(
+            children: _selecting
+                ? [
+                    Expanded(
+                      child: Text(
+                        '已选 ${_selected.length} 集',
+                        style: sheetTitle,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _select(false),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() {
+                        all
+                            ? _selected.clear()
+                            : _selected.addAll(
+                                List.generate(episodes.length, (i) => i),
+                              );
+                      }),
+                      child: Text(all ? '取消全选' : '全选'),
+                    ),
+                    FilledButton(
+                      onPressed: _selected.isEmpty ? null : _download,
+                      child: const Text('下载'),
+                    ),
+                  ]
+                : [
+                    const Text('选集', style: sheetTitle),
+                    Expanded(
+                      child: Text(
+                        '$status共 ${episodes.length} 集',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    if (_canDownload)
+                      IconButton(
+                        onPressed: () => _select(true),
+                        icon: const Icon(Icons.download_rounded),
+                        tooltip: '下载选集',
+                      ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                      tooltip: '关闭',
+                    ),
+                  ],
+          ),
+          Expanded(
+            child: ListenableBuilder(
+              listenable: session,
+              builder: (context, _) => EpisodeGrid(
+                episodes: episodes,
+                current: session.index,
+                selecting: _selecting,
+                selected: _selected,
+                touch: true,
+                onSelectionChanged: () => setState(() {}),
+                onPick: (index) {
+                  Navigator.pop(context);
+                  if (index != session.index) {
+                    unawaited(session.play(index));
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

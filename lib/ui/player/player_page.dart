@@ -12,7 +12,6 @@ import '../theme/app_theme.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/follow_button.dart';
 import 'episode_grid.dart';
-import 'mini_player.dart';
 import 'playback_handle.dart';
 import 'player_surface.dart';
 import 'window_fullscreen.dart';

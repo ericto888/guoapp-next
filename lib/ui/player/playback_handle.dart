@@ -23,16 +23,16 @@ class PlaybackHandle {
     bool autoplay = true,
     bool preopen = true,
   }) {
-    final main = _player();
-    final standby = preopen ? _player() : null;
-    _videos[main] = VideoController(main);
-    if (standby != null) _videos[standby] = VideoController(standby);
+    final main = _respawnPlayer();
+    final standby = preopen ? _respawnPlayer() : null;
     session = PlaybackSession(
       repository: repository,
       store: store,
       detail: detail,
       player: main,
       standby: standby,
+      respawn: _respawnPlayer,
+      onRetired: _retireVideo,
       index: index,
       position: position,
       autoplay: autoplay,
@@ -42,7 +42,22 @@ class PlaybackHandle {
   late final PlaybackSession session;
   final _videos = <Player, VideoController>{};
 
-  VideoController video(Player player) => _videos[player]!;
+  /// iOS 切出/锁屏后回前台恢复失败时，连同渲染上下文一起重建播放器。
+  Player _respawnPlayer() {
+    final player = _player();
+    _videos[player] = VideoController(player);
+    return player;
+  }
 
-  void dispose() => session.dispose();
+  /// media_kit_video 2.0.1 的 VideoController 没有公开 dispose，
+  /// 播放器释放后移除映射即可，避免旧实例一直滞留。
+  void _retireVideo(Player player) => _videos.remove(player);
+
+  VideoController video(Player player) =>
+      _videos.putIfAbsent(player, () => VideoController(player));
+
+  void dispose() {
+    session.dispose();
+    _videos.clear();
+  }
 }

@@ -505,4 +505,34 @@ void main() {
     player.buffer(false);
     expect(session.stalled, isFalse);
   });
+
+  test('rebuilds the player when lifecycle resume cannot advance', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final player = FakePlayer();
+    final rebuilt = FakePlayer();
+    final session = PlaybackSession(
+      repository: repository,
+      store: store,
+      detail: dramaDetail(_show, count: 3),
+      player: player,
+      respawn: () => rebuilt,
+      index: 0,
+      position: 5,
+    );
+    addTearDown(() {
+      if (_closed.add(session)) session.dispose();
+    });
+    await pumpEventQueue();
+    expect(player.opened.single.start, _seconds(5));
+
+    // iOS 切出/锁屏：只有 paused→resumed 序列，旧实例回前台位置不再推进。
+    session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
+    session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
+
+    await Future<void>.delayed(const Duration(milliseconds: 3600));
+    expect(identical(session.player, rebuilt), isTrue);
+    expect(player.disposed, isTrue);
+    expect(rebuilt.opened.first.start, _seconds(5));
+  });
 }

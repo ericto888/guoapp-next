@@ -26,12 +26,25 @@ class PlaybackPage extends StatefulWidget {
   State<PlaybackPage> createState() => _PlaybackPageState();
 }
 
+/// 页面布局是否按横屏渲染。
+///
+/// 与新视频首帧尺寸确认状态分离：切集时会话会作废上一集的 aspect 证据，
+/// 此时不能把「尺寸未知」误判成「竖屏」——否则横屏切下一集会先退回竖屏、
+/// 等新首帧到达再切回横屏。尺寸未知期间沿用当前布局；新尺寸到达
+/// （videoParams）后再按实际宽高比判断是否真的需要换布局。
+@visibleForTesting
+bool playbackLayoutIsWide({
+  required bool aspectKnown,
+  required double aspectRatio,
+  required bool currentWide,
+}) => aspectKnown ? aspectRatio >= 1 : currentWide;
+
 class _PlaybackPageState extends State<PlaybackPage> {
   final _padFullscreen = ValueNotifier(false);
   bool _windowFullscreen = false;
   final _pageScope = FocusScopeNode(debugLabel: 'playbackPage');
   final _pip = PictureInPicture.instance;
-  late bool _wideVideo = _measure();
+  bool _wideVideo = false;
   MediaQueryData? _media;
   bool _shown = false;
   Player? _bound;
@@ -39,7 +52,12 @@ class _PlaybackPageState extends State<PlaybackPage> {
 
   PlaybackSession get _session => widget.handle.session;
 
-  bool _measure() => _session.aspectKnown && _session.aspectRatio >= 1;
+  /// 当前页面布局是否按横屏渲染。
+  bool _measure() => playbackLayoutIsWide(
+    aspectKnown: _session.aspectKnown,
+    aspectRatio: _session.aspectRatio,
+    currentWide: _wideVideo,
+  );
 
   bool get _television =>
       AppScope.formFactorOf(context) == FormFactor.television;
@@ -47,10 +65,8 @@ class _PlaybackPageState extends State<PlaybackPage> {
   @override
   void initState() {
     super.initState();
+    _wideVideo = _session.aspectKnown && _session.aspectRatio >= 1;
     _session.addListener(_changed);
-    if (_wideVideo && widget.store.playbackPreferences.portraitStyleForWide) {
-      unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
-    }
     _padFullscreen.addListener(_padFullscreenChanged);
     _pip.addListener(_pipChanged);
     _pip.onAction = _action;
@@ -69,24 +85,18 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _pageScope.dispose();
     if (_padFullscreen.value) _applyPadFullscreen(false);
     _padFullscreen.dispose();
-    if (widget.store.playbackPreferences.portraitStyleForWide) {
-      unawaited(AppDevice.releaseOrientation());
-    }
     unawaited(AppDevice.resetBrightness());
     widget.handle.dispose();
     super.dispose();
   }
 
   void _changed() {
+    final previous = _bound;
     _bind();
     _sync();
     final wide = _measure();
-    if (wide != _wideVideo) {
-      setState(() => _wideVideo = wide);
-      if (wide && widget.store.playbackPreferences.portraitStyleForWide) {
-        unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
-      }
-    }
+    final swapped = !identical(previous, _bound);
+    if (wide != _wideVideo || swapped) setState(() => _wideVideo = wide);
   }
 
   void _bind() {
@@ -261,19 +271,13 @@ class _PlaybackPageState extends State<PlaybackPage> {
         FormFactor.television => TelevisionPlayerPage(handle: widget.handle),
       };
     }
-    final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
     return switch (form) {
       FormFactor.pad || FormFactor.window => _padPage(context, mini),
-      FormFactor.phone
-          when _wideVideo &&
-              !(portraitStyle &&
-                  MediaQuery.orientationOf(context) == Orientation.portrait) =>
-        LandscapePlayerPage(
-          store: widget.store,
-          handle: widget.handle,
-          followSensor: portraitStyle,
-          onMiniWindow: mini,
-        ),
+      FormFactor.phone when _wideVideo => LandscapePlayerPage(
+        store: widget.store,
+        handle: widget.handle,
+        onMiniWindow: mini,
+      ),
       FormFactor.phone => PortraitPlayerPage(
         store: widget.store,
         handle: widget.handle,
@@ -293,8 +297,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
         onMiniWindow: mini,
       );
     }
-    final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
-    return _wideVideo && !portraitStyle
+    return _wideVideo
         ? LandscapePlayerPage(
             store: widget.store,
             handle: widget.handle,

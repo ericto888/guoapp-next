@@ -40,12 +40,15 @@ class PlaybackSession extends ChangeNotifier {
     required this.repository,
     required this.store,
     required this.detail,
-    required this._player,
+    required Player player,
     this._standby,
+    this._respawn,
+    this._onRetired,
     required int index,
     double position = 0,
     bool autoplay = true,
-  }) : _engaged = autoplay,
+  }) : _player = player,
+       _engaged = autoplay,
        _index = index,
        _epoch = store.profileEpoch {
     final preferences = store.playbackPreferences;
@@ -147,6 +150,15 @@ class PlaybackSession extends ChangeNotifier {
   DramaDetail detail;
   Player _player;
   Player? _standby;
+
+  /// 切出/锁屏后底层实例可能已被系统回收，恢复播放前需要重建播放器。
+  final Player Function()? _respawn;
+  final void Function(Player player)? _onRetired;
+  bool _rebuilding = false;
+  bool _rebuildQueued = false;
+  double _queuedPosition = 0;
+  bool _queuedPlay = true;
+  int? _queuedToken;
   late final DanmakuController danmaku;
   late final PlaybackLoader _loader;
   late final PlaybackPreloader _preloader;
@@ -223,6 +235,7 @@ class PlaybackSession extends ChangeNotifier {
   String? get saveWarning => _saveWarning;
   bool get ready => !_loading && _error == null;
   bool get advancingSeason => _advancingSeason;
+  DramaSeason? get nextSeason => detail.nextSeason;
 
   /// Exposes the same explicit next-season action used by the portrait pager.
   Future<void> playNextSeason() => _playNextSeason();
@@ -1292,6 +1305,9 @@ class PlaybackSession extends ChangeNotifier {
       token == _restoreToken &&
       generation == _generation;
 
+  bool _restorable(int token) =>
+      !_closed && _foreground && token == _restoreToken;
+
   Future<void> _restoreAfterLifecycle(int token) async {
     final generation = _generation;
     final index = _index;
@@ -1317,40 +1333,187 @@ class PlaybackSession extends ChangeNotifier {
     _playIntent = true;
     _sync();
     _notify();
+    Object? failure;
     try {
       await player.play();
     } catch (error) {
+      failure = error;
       DiaryService.add('[Play] 前台恢复 play 失败：${_diagnostic(error)}');
-      if (_lifecycleRestoreValid(token, generation)) {
-        _queueRecovery('lifecycle_resume_play_failed');
-      }
-      return;
     }
+    if (!_lifecycleRestoreValid(token, generation) || index != _index) return;
 
-    for (var attempt = 0; attempt < 4; attempt++) {
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-      if (!_lifecycleRestoreValid(token, generation) || index != _index) return;
-      final state = player.state;
-      if (state.playing &&
-          state.position > before + const Duration(milliseconds: 250)) {
-        DiaryService.add('[Play] 前台原地恢复成功 位置=${state.position}');
-        _resumePosition = state.position.inMilliseconds / 1000;
-        _health.reset();
-        _notify();
-        return;
-      }
-      if (state.buffering) continue;
-      if (!state.playing) {
-        try {
-          await player.play();
-        } catch (_) {
-          break;
+    if (failure == null) {
+      for (var attempt = 0; attempt < 4; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        if (!_lifecycleRestoreValid(token, generation) || index != _index) {
+          return;
+        }
+        final state = player.state;
+        if (state.playing &&
+            state.position > before + const Duration(milliseconds: 250)) {
+          DiaryService.add('[Play] 前台原地恢复成功 位置=${state.position}');
+          _resumePosition = state.position.inMilliseconds / 1000;
+          _health.reset();
+          _notify();
+          return;
+        }
+        if (state.buffering) continue;
+        if (!state.playing) {
+          try {
+            await player.play();
+          } catch (_) {
+            break;
+          }
         }
       }
     }
-    if (_lifecycleRestoreValid(token, generation)) {
-      DiaryService.add('[Play] 前台恢复后播放位置未推进，启动播放器恢复流程');
-      _queueRecovery('lifecycle_resume_no_progress');
+    if (!_lifecycleRestoreValid(token, generation) || index != _index) return;
+    final live = currentPosition;
+    final resumeAt = live > _resumePosition ? live : _resumePosition;
+    DiaryService.add('[Play] 前台原地恢复失败，重建播放器 位置=${resumeAt.toStringAsFixed(1)}');
+    await _rebuildAndResume(resumeAt, true, token: token);
+  }
+
+  /// 等待播放位置真的推进：缓冲中不算成功，最多等 [windows] 个窗口。
+  Future<bool> _confirmProgress(
+    Duration before, {
+    int windows = 2,
+    bool Function()? alive,
+  }) async {
+    for (var attempt = 0; attempt < windows; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      if (_closed || !_foreground || _loading) return false;
+      if (alive != null && !alive()) return false;
+      final state = player.state;
+      if (state.playing &&
+          state.position > before + const Duration(milliseconds: 300)) {
+        return true;
+      }
+      if (!state.buffering) return false;
+    }
+    return false;
+  }
+
+  Future<void> _retire(Player target) async {
+    try {
+      await target.dispose().timeout(const Duration(milliseconds: 1500));
+    } catch (_) {
+      DiaryService.add('[Play] 旧播放器释放超时，继续恢复');
+    } finally {
+      _onRetired?.call(target);
+    }
+  }
+
+  /// 切出/锁屏后回前台原地恢复失败：底层实例已被系统回收，只重开同一
+  /// 实例会一直卡住。这里重建 Player 与渲染上下文，再按原位置重新解析打开。
+  Future<void> _rebuildAndResume(
+    double position,
+    bool playWhenReady, {
+    int? token,
+  }) async {
+    if (_rebuilding) {
+      // 重建期间又来了恢复请求：记下最新位置与意图，完成后补跑一次。
+      _rebuildQueued = true;
+      _queuedPosition = position;
+      _queuedPlay = playWhenReady;
+      _queuedToken = token;
+      return;
+    }
+    if (token != null && !_restorable(token)) return;
+    final spawn = _respawn;
+    if (spawn == null) {
+      await play(_index, position: position, playWhenReady: playWhenReady);
+      return;
+    }
+    final watch = Stopwatch()..start();
+    _rebuilding = true;
+    final ticket = ++_generation;
+    try {
+      await _serialize(() async {
+        if (!_current(ticket)) return;
+        final previous = _player;
+        final volume = previous.state.volume;
+        final plan = _plan;
+        final standbyPlan = _standbyPlan;
+        final standby = _standby;
+        _standbyPlan = null;
+        _standbyIndex = -1;
+        _standbyOpen = false;
+        _preloader.clear();
+        _seekSequence++;
+        _acceptErrors = false;
+        _pendingError = false;
+        _errorTimer?.cancel();
+        _plan = null;
+        _openedIndex = -1;
+        danmaku.setPlan(null);
+        final stopped = await previous
+            .stop()
+            .timeout(const Duration(milliseconds: 1500))
+            .then((_) => true, onError: (Object _) => false);
+        await _release(plan?.session ?? '');
+        if (standbyPlan != null) await _release(standbyPlan.session);
+        if (standby != null) {
+          unawaited(standby.stop().catchError((Object _) {}));
+        }
+        _player = spawn();
+        _bind();
+        // 旧实例释放完成前不打开新媒体，避免音频与渲染资源交叠。
+        if (stopped) {
+          await _retire(previous);
+        } else {
+          // stop 挂起时异步释放，避免每轮重建都滞留一个旧实例。
+          unawaited(_retire(previous));
+        }
+        await _player.setVolume(volume);
+        await _setRate(_speed);
+      });
+      if (_closed || !_foreground || !_current(ticket)) return;
+      if (token != null && !_restorable(token)) {
+        // 重建期间用户已暂停：只恢复画面，不自动播放。
+        if (_foreground && !_resumeIntent) {
+          await play(_index, position: position, playWhenReady: false);
+        }
+        return;
+      }
+      await play(_index, position: position, playWhenReady: playWhenReady);
+      if (!playWhenReady) return;
+      // play() 内部会自增 generation，必须用新 ticket 判断有效性。
+      final liveTicket = _generation;
+      if (_closed || !_foreground || !_current(liveTicket)) return;
+      final baseline = Duration(milliseconds: (position * 1000).round() - 300);
+      final playing = await _confirmProgress(
+        baseline,
+        alive: () => _current(liveTicket),
+      );
+      if (_closed || !_foreground || !_current(liveTicket)) return;
+      if (playing) {
+        DiaryService.add(
+          '[Play] 重建恢复成功 耗时=${watch.elapsedMilliseconds}ms '
+          '位置=${currentPosition.toStringAsFixed(1)}',
+        );
+        return;
+      }
+      DiaryService.add(
+        '[Play] 重建后仍未播放 耗时=${watch.elapsedMilliseconds}ms '
+        '位置=${currentPosition.toStringAsFixed(1)}',
+      );
+      _queueRecovery('rebuild_no_progress');
+    } finally {
+      _rebuilding = false;
+      if (_rebuildQueued) {
+        _rebuildQueued = false;
+        final queuedPosition = _queuedPosition;
+        final queuedPlay = _queuedPlay;
+        final queuedToken = _queuedToken;
+        if (!_closed &&
+            _foreground &&
+            (queuedToken == null || _restorable(queuedToken))) {
+          unawaited(
+            _rebuildAndResume(queuedPosition, queuedPlay, token: queuedToken),
+          );
+        }
+      }
     }
   }
 

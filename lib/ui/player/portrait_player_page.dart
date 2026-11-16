@@ -19,7 +19,6 @@ import '../widgets/follow_button.dart';
 import 'danmaku_overlay.dart';
 import 'episode_grid.dart';
 import 'fade_presence.dart';
-import 'mini_player.dart';
 import 'playback_sheets.dart';
 import 'playback_handle.dart';
 import 'player_surface.dart';
