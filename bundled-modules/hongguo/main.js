@@ -44,6 +44,7 @@ const tagPanelCategory = "5000";
 
 const paths = {
   videoDetail: "/novel/player/video_detail/v1/",
+  multiVideoModel: "/novel/player/multi_video_model/v1/",
   videoModel: "/novel/player/video_model/v1/",
   landpage: "/reading/distribution/category/landpage/v/",
   seriesPack: "/reading/distribution/book_pack_fields/inner_feed_detail/v1/",
@@ -904,7 +905,7 @@ function mediaAddresses(info) {
     }
   };
   if (isRecord(info)) {
-    for (const key of ["main_url", "backup_url", "backup_url_1", "backup_url_2", "backup_urls", "url_list"]) {
+    for (const key of ["main_url", "backup_url", "backup_url_1", "backup_url_2", "backup_url_3", "backup_url_list", "backup_urls", "url_list"]) {
       add(info[key]);
     }
   }
@@ -1111,7 +1112,7 @@ function appRequest(method, path, extra, payload, options) {
     if (remainingMs(deadline) <= 0) {
       throw lastError || timeoutError();
     }
-    const address = appBaseUrl + path;
+    const address = (options.baseUrl || appBaseUrl) + path;
     const nonce = comment ? host.randomBytes(11) : null;
     let ticket;
     try {
@@ -1898,29 +1899,68 @@ function appMedia(videoId) {
 }
 
 function fetchAppMedia(videoId, helper) {
-  const payload = { video_id: videoId, content_type: 1, biz_param: { need_all_video_definition: true, video_platform: 3 } };
-  const result = appRequest("POST", paths.videoModel, null, payload, { helper });
-  const data = nested(result, "data");
-  let model = isRecord(data.video_model) ? data.video_model : null;
-  if (typeof data.video_model === "string" && data.video_model !== "") {
-    let encoded = data.video_model;
-    const decoded = decodeBase64Text(encoded);
-    if (decoded !== null && decoded !== "") {
-      encoded = decoded;
-    }
+  const biz = {
+    detail_page_version: 0,
+    device_level: 3,
+    disable_digg_stat: false,
+    need_all_video_definition: true,
+    need_mp4_align: false,
+    use_os_player: false,
+    use_server_dns: false,
+    video_platform: 1024,
+  };
+  const routes = [
+    { baseUrl: appBaseUrl, path: paths.multiVideoModel, single: false },
+    { baseUrl: "https://reading.snssdk.com", path: paths.multiVideoModel, single: false },
+    { baseUrl: "https://reading.snssdk.com", path: paths.videoModel, single: true },
+    { baseUrl: "https://api5-normal.fqnovel.com", path: paths.multiVideoModel, single: false },
+  ];
+  let lastError = null;
+  for (const route of routes) {
     try {
-      model = parseJson(encoded);
+      const payload = route.single
+        ? { video_id: videoId, content_type: 1, biz_param: biz }
+        : { biz_param: biz, mixed_video_id_map: { 1004: [videoId] } };
+      const result = appRequest("POST", route.path, null, payload, {
+        helper,
+        baseUrl: route.baseUrl,
+      });
+      const data = nested(result, "data");
+      const entry = route.single
+        ? data
+        : isRecord(data[videoId]) ? data[videoId] : {};
+      let model = isRecord(entry.video_model) ? entry.video_model : null;
+      if (typeof entry.video_model === "string" && entry.video_model !== "") {
+        let encoded = entry.video_model;
+        const decoded = decodeBase64Text(encoded);
+        if (decoded !== null && decoded !== "") {
+          encoded = decoded;
+        }
+        try {
+          model = parseJson(encoded);
+        } catch (error) {
+          model = null;
+        }
+      }
+      if (isEmptyRecord(model) && anyList(entry.video_list).length > 0) {
+        model = {
+          video_list: entry.video_list,
+          video_duration: entry.video_duration,
+          duration: entry.duration,
+        };
+      }
+      if (!isRecord(model) || isEmptyRecord(model)) {
+        throw failure("红果播放接口未返回本集视频模型", { noCompatibleMedia: true });
+      }
+      return selectAppMedia(model);
     } catch (error) {
-      model = undefined;
-    }
-    if (!isRecord(model) && model !== null) {
-      throw new Error("红果 App 播放信息格式异常");
+      lastError = error;
+      if (error.backoff || error.timeout) {
+        throw error;
+      }
     }
   }
-  if (isEmptyRecord(model) && anyList(data.video_list).length > 0) {
-    model = { video_list: data.video_list, video_duration: data.video_duration, duration: data.duration };
-  }
-  return selectAppMedia(model || {});
+  throw lastError || failure("红果播放接口线路均不可用", { noCompatibleMedia: true });
 }
 
 function selectAppMedia(model) {
