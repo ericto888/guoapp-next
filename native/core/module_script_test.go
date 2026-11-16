@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/url"
@@ -276,7 +277,8 @@ module.exports = {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := module.provider(&moduleTestHost{state: map[string][]byte{}})
+	testHost := &moduleTestHost{state: map[string][]byte{}}
+	p := module.provider(testHost)
 	ctx := context.Background()
 	if categories, err := p.Categories(ctx, true); !errors.Is(err, ErrCategoriesIncomplete) || len(categories) != 1 || categories[0].ID != "a" {
 		t.Fatalf("incomplete categories = %v, %v", categories, err)
@@ -340,6 +342,7 @@ module.exports = {
     const ttNonce = new Uint8Array(Array.from({length: 32}, (_, i) => i));
     const tt = host.hongguoTTEncrypt(host.utf8Encode("hongguo-ttencrypt-test"), ttNonce);
     const ttCheck = host.hexEncode(tt.slice(0, 6)) + ":" + tt.length;
+    const binaryResponse = host.fetch({ method: "POST", url: "https://media.example/upload", bodyBase64: host.base64Encode(new Uint8Array([0, 255, 1])) });
     const gz = host.gzipCompress(host.utf8Encode("hongguo-device"));
     const gzMagic = host.hexEncode(gz.slice(0, 2));
     const sha = host.hexEncode(host.sha512(host.utf8Encode("abc")));
@@ -347,7 +350,7 @@ module.exports = {
     const agreed = host.hexEncode(host.ecdhP256(left.privateKey, right.publicKey)) === host.hexEncode(host.ecdhP256(right.privateKey, left.publicKey));
     const okm = host.hexEncode(host.hkdfSha256(host.hexDecode("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
       host.hexDecode("000102030405060708090a0b0c"), host.hexDecode("f0f1f2f3f4f5f6f7f8f9"), 42));
-    return { items: [{ id: host.dramaId("x"), title: [plain, opened, tampered, agreed, left.publicKey.length, okm, gzMagic, sha, ttCheck].join("|") }], hasMore: false };
+    return { items: [{ id: host.dramaId("x"), title: [plain, opened, tampered, agreed, left.publicKey.length, okm, gzMagic, sha, ttCheck, binaryResponse.status].join("|") }], hasMore: false };
   },
   detail() { return {}; },
   resolveMedia() { return {}; },
@@ -369,6 +372,9 @@ module.exports = {
 	want := "0123456789abcdef|红果|rejected|true|65|3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865|1f8b|ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f|746305100000:134"
 	if err != nil || len(items) != 1 || items[0].Title != want {
 		t.Fatalf("crypto = %+v, %v", items, err)
+	}
+	if len(testHost.requests) != 1 || !bytes.Equal(testHost.requests[0].Body, []byte{0, 255, 1}) {
+		t.Fatalf("binary request body = %v", testHost.requests)
 	}
 	authorizer, ok := providerAs[MediaAuthorizer](p)
 	if !ok {
