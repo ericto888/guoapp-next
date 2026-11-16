@@ -341,7 +341,7 @@ module.exports = {
     try { host.aesGcmOpen(key, nonce, sealed, "other"); } catch (error) { tampered = "rejected"; }
     const ttNonce = new Uint8Array(Array.from({length: 32}, (_, i) => i));
     const tt = host.hongguoTTEncrypt(host.utf8Encode("hongguo-ttencrypt-test"), ttNonce);
-    const ttCheck = host.hexEncode(tt.slice(0, 6)) + ":" + tt.length;
+    const ttCheck = host.hexEncode(tt);
     const binaryResponse = host.fetch({ method: "POST", url: "https://media.example/upload", bodyBase64: host.base64Encode(new Uint8Array([0, 255, 1])) });
     const gz = host.gzipCompress(host.utf8Encode("hongguo-device"));
     const gzMagic = host.hexEncode(gz.slice(0, 2));
@@ -369,7 +369,7 @@ module.exports = {
 	ctx := context.Background()
 	searcher, _ := providerAs[Searcher](p)
 	items, _, err := searcher.Search(ctx, 1, "x")
-	want := "0123456789abcdef|红果|rejected|true|65|3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865|1f8b|ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f|746305100000:134|200"
+	want := "0123456789abcdef|红果|rejected|true|65|3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865|1f8b|ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f|746305100000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f950ea340090a9417f7b9a101e7dfb6ead49118e2f7f0ceed19e7fb982713f7617e1a0edac10a81cdd29af5ccc8eff892bd75c88693f977195b6e2b6d2301e34e78b594a3051123be856dde2bb3d1b44baf1de2e4ed9670a9984536de03c4513d|200"
 	if err != nil || len(items) != 1 || items[0].Title != want {
 		t.Fatalf("crypto = %+v, %v", items, err)
 	}
