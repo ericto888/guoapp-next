@@ -337,7 +337,10 @@ module.exports = {
     const opened = host.utf8Decode(host.aesGcmOpen(key, nonce, sealed, "aad"));
     let tampered = "accepted";
     try { host.aesGcmOpen(key, nonce, sealed, "other"); } catch (error) { tampered = "rejected"; }
-    const gz = host.gzipCompress(host.utf8Encode("hongguo-device"));\n    const gzMagic = host.hexEncode(gz.slice(0, 2));\n    const sha = host.hexEncode(host.sha512(host.utf8Encode("abc")));\n    const left = host.ecdhP256KeyPair(), right = host.ecdhP256KeyPair();
+    const gz = host.gzipCompress(host.utf8Encode("hongguo-device"));
+    const gzMagic = host.hexEncode(gz.slice(0, 2));
+    const sha = host.hexEncode(host.sha512(host.utf8Encode("abc")));
+    const left = host.ecdhP256KeyPair(), right = host.ecdhP256KeyPair();
     const agreed = host.hexEncode(host.ecdhP256(left.privateKey, right.publicKey)) === host.hexEncode(host.ecdhP256(right.privateKey, left.publicKey));
     const okm = host.hexEncode(host.hkdfSha256(host.hexDecode("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
       host.hexDecode("000102030405060708090a0b0c"), host.hexDecode("f0f1f2f3f4f5f6f7f8f9"), 42));
