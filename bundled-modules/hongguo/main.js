@@ -1899,21 +1899,18 @@ function appMedia(videoId) {
 }
 
 function fetchAppMedia(videoId, helper) {
+  // Match the independently verified THLRedGuo App request first:
+  // video_model/v1 + content_type=1 + video_platform=3.
   const biz = {
-    detail_page_version: 0,
-    device_level: 3,
-    disable_digg_stat: false,
     need_all_video_definition: true,
-    need_mp4_align: false,
-    use_os_player: false,
-    use_server_dns: false,
-    video_platform: 1024,
+    video_platform: 3,
   };
   const routes = [
+    { baseUrl: appBaseUrl, path: paths.videoModel, single: true },
+    { baseUrl: "https://reading.snssdk.com", path: paths.videoModel, single: true },
     { baseUrl: appBaseUrl, path: paths.multiVideoModel, single: false },
     { baseUrl: "https://reading.snssdk.com", path: paths.multiVideoModel, single: false },
-    { baseUrl: "https://reading.snssdk.com", path: paths.videoModel, single: true },
-    { baseUrl: "https://api5-normal.fqnovel.com", path: paths.multiVideoModel, single: false },
+    { baseUrl: "https://api5-normal.fqnovel.com", path: paths.videoModel, single: true },
   ];
   let lastError = null;
   for (const route of routes) {
