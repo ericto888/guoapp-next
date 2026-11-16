@@ -8,6 +8,33 @@
   - `1e4cee0` feat: restore iOS background playback recovery from guoapp
   - `33d2016` feat(player): 横片播放改用 guoapp 横屏页，并补 iOS 切出/锁屏恢复失败后的播放器重建（2.0.0+116）
 
+## 零、冻结清单（拉取上游更新时不得改动）
+
+以下文件是播放器定制的冻结文件，合并上游时必须保留本项目版本：
+
+- `lib/playback_session.dart`
+- `lib/playback_preferences.dart`
+- `lib/app_device.dart`
+- `lib/ui/player/` 下全部文件
+- `ios/Runner/AppDelegate.swift`
+- `ios/Runner/Info.plist`
+- `test/playback_session_test.dart`
+
+合并上游后的检查（`<合并前提交>` 取合并前 main 的提交）：
+
+```powershell
+git diff <合并前提交> -- lib/playback_session.dart lib/playback_preferences.dart `
+  lib/app_device.dart lib/ui/player ios/Runner/AppDelegate.swift `
+  ios/Runner/Info.plist test/playback_session_test.dart
+```
+
+输出应为空。若上游确实改动了这些文件，按本文档逐项手工保留，不得整文件取上游版本。
+
+`lib/ui/settings/settings_sections.dart` 允许跟随上游重排，但必须保留播放相关设置项（如「横屏底部进度线」），且不得恢复「横屏视频也使用竖屏样式」/ `portraitStyleForWide`。
+
+最近一次验证：2026-11-16 合并上游 7 个提交（`4094795`），上述冻结文件与合并前备份
+`backup/pre-upstream-merge-20261116` 对比零差异。
+
 ## 一、iOS 切出 / 锁屏恢复播放
 
 目标：切出 App、锁屏、回前台后能继续播放；系统回收底层实例时自动重建，不卡在旧实例上。
