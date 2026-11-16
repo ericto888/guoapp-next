@@ -298,9 +298,9 @@ func (p *jsProvider) hostUtilities(instance *jsInstance) map[string]any {
 }
 
 
-var hongguoTTEncryptSalt = mustDecodeHex("4dd4c2e6b83162090e52b3c7a6733ba41cb2462b829ab58a196b39db57177524f49baf7f08e8d68d26a72e37c1a95a2f1f05a51892aef2949732b62a38aadd58")
+var hongguoTTEncryptSalt = hongguoMustDecodeHex("4dd4c2e6b83162090e52b3c7a6733ba41cb2462b829ab58a196b39db57177524f49baf7f08e8d68d26a72e37c1a95a2f1f05a51892aef2949732b62a38aadd58")
 
-func mustDecodeHex(value string) []byte {
+func hongguoMustDecodeHex(value string) []byte {
 	decoded, err := hex.DecodeString(value)
 	if err != nil { panic(err) }
 	return decoded
