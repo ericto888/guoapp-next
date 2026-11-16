@@ -2,7 +2,7 @@ const siteBaseUrl = "https://hongguoduanju.com";
 const appBaseUrl = "https://api5-normal-sinfonlineb.fqnovel.com";
 const appUserAgent = "com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)";
 const webUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1";
-const deviceRegisterUrl = "https://log.snssdk.com/service/2/device_register/";
+const deviceRegisterUrl = "https://log5-applog-lf.fqnovel.com/service/2/device_register/";
 const mediaReferer = "https://novel.snssdk.com/";
 const responseLimit = 20 * 1024 * 1024;
 const cencScheme = "hongguo-cenc://";
@@ -44,7 +44,7 @@ const tagPanelCategory = "5000";
 
 const paths = {
   videoDetail: "/novel/player/video_detail/v1/",
-  multiVideoModel: "/novel/player/multi_video_model/v1/",
+  videoTabMultiVideoModel: "/reading/bookapi/video_tab/multi_video_model/v1/",
   videoModel: "/novel/player/video_model/v1/",
   landpage: "/reading/distribution/category/landpage/v/",
   seriesPack: "/reading/distribution/book_pack_fields/inner_feed_detail/v1/",
@@ -998,6 +998,10 @@ function registerDevice() {
   delete query.device_id;
   delete query.iid;
   query.req_id = uuidLike();
+  query.tt_data = "a";
+  query.cronet_version = "8d40f833_2026-03-03";
+  query.ttnet_version = "4.2.243.31-douyin";
+  query.use_store_region_cookie = "1";
   const ticket = host.reserve({ url: deviceRegisterUrl });
   query._rticket = String(Date.now());
   const response = host.fetch({
@@ -1127,7 +1131,7 @@ function appRequest(method, path, extra, payload, options) {
     const now = Date.now();
     query._rticket = String(now);
     const rawQuery = encodeQuery(query);
-    const headers = { "User-Agent": appUserAgent, Accept: "application/json", "X-SS-From-Web": "0", "Sdk-Version": "2" };
+    const headers = { "User-Agent": appUserAgent, Accept: "application/json", "X-XS-From-Web": "0", "Sdk-Version": "2" };
     if (comment) {
       headers["Comment-Source"] = "601";
       headers["Server-Channel"] = "1000";
@@ -1906,29 +1910,74 @@ function appMedia(videoId) {
 }
 
 function fetchAppMedia(videoId, helper) {
-  // Match the independently verified THLRedGuo App request first:
-  // video_model/v1 + content_type=1 + video_platform=3.
-  const biz = {
-    need_all_video_definition: true,
-    video_platform: 3,
-  };
+  // ShortJuZhiJia 4.6.21+189 uses the video_tab multi-video model endpoint.
+  // Keep only the pre-existing single-video endpoint as a compatibility fallback;
+  // do not use the THLRedGuo novel/multi_video_model route.
   const routes = [
-    { baseUrl: appBaseUrl, path: paths.videoModel, single: true },
-    { baseUrl: "https://reading.snssdk.com", path: paths.videoModel, single: true },
-    { baseUrl: appBaseUrl, path: paths.multiVideoModel, single: false },
-    { baseUrl: "https://reading.snssdk.com", path: paths.multiVideoModel, single: false },
-    { baseUrl: "https://api5-normal.fqnovel.com", path: paths.videoModel, single: true },
+    {
+      baseUrl: appBaseUrl,
+      path: paths.videoTabMultiVideoModel,
+      payload: {
+        biz_param: {
+          detail_page_version: 0,
+          device_level: 3,
+          need_all_video_definition: true,
+          need_mp4_align: false,
+          use_os_player: false,
+          use_server_dns: false,
+          video_platform: 1024,
+        },
+        mixed_video_id_map: { 1004: [videoId] },
+      },
+      single: false,
+    },
+    {
+      baseUrl: "https://api5-normal-sinfonlinea.fqnovel.com",
+      path: paths.videoTabMultiVideoModel,
+      payload: {
+        biz_param: {
+          detail_page_version: 0,
+          device_level: 3,
+          need_all_video_definition: true,
+          need_mp4_align: false,
+          use_os_player: false,
+          use_server_dns: false,
+          video_platform: 1024,
+        },
+        mixed_video_id_map: { 1004: [videoId] },
+      },
+      single: false,
+    },
+    {
+      baseUrl: "https://api5-normal-sinfonlinec.fqnovel.com",
+      path: paths.videoTabMultiVideoModel,
+      payload: {
+        biz_param: {
+          detail_page_version: 0,
+          device_level: 3,
+          need_all_video_definition: true,
+          need_mp4_align: false,
+          use_os_player: false,
+          use_server_dns: false,
+          video_platform: 1024,
+        },
+        mixed_video_id_map: { 1004: [videoId] },
+      },
+      single: false,
+    },
+    {
+      baseUrl: appBaseUrl,
+      path: paths.videoModel,
+      payload: { video_id: videoId, content_type: 1, biz_param: { need_all_video_definition: true } },
+      single: true,
+    },
   ];
   let lastError = null;
   for (const route of routes) {
     try {
-      const payload = route.single
-        ? { video_id: videoId, content_type: 1, biz_param: biz }
-        : { biz_param: biz, mixed_video_id_map: { 1004: [videoId] } };
-      const result = appRequest("POST", route.path, null, payload, {
+      const result = appRequest("POST", route.path, null, route.payload, {
         helper,
         baseUrl: route.baseUrl,
-        gorgonOnly: route.single,
       });
       const data = nested(result, "data");
       const entry = route.single
@@ -1955,7 +2004,7 @@ function fetchAppMedia(videoId, helper) {
         };
       }
       if (!isRecord(model) || isEmptyRecord(model)) {
-        throw failure("红果播放接口未返回本集视频模型", { noCompatibleMedia: true });
+        throw failure("短剧之家播放接口未返回本集视频模型", { noCompatibleMedia: true });
       }
       return selectAppMedia(model);
     } catch (error) {
@@ -1965,7 +2014,7 @@ function fetchAppMedia(videoId, helper) {
       }
     }
   }
-  throw lastError || failure("红果播放接口线路均不可用", { noCompatibleMedia: true });
+  throw lastError || failure("短剧之家播放接口线路均不可用", { noCompatibleMedia: true });
 }
 
 function selectAppMedia(model) {
