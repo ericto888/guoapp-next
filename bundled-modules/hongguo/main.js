@@ -1906,62 +1906,82 @@ function appMedia(videoId) {
 }
 
 function fetchAppMedia(videoId, helper) {
-  // Match the independently verified THLRedGuo App request first:
-  // video_model/v1 + content_type=1 + video_platform=3.
-  const biz = {
-    need_all_video_definition: true,
-    video_platform: 3,
-  };
+  // Prefer the current THLRedGuo multi-video model contract (video_platform=1024).
+  // Keep the older video_model contract as a fallback for server-side compatibility.
   const routes = [
-    { baseUrl: appBaseUrl, path: paths.videoModel, single: true },
-    { baseUrl: "https://reading.snssdk.com", path: paths.videoModel, single: true },
-    { baseUrl: appBaseUrl, path: paths.multiVideoModel, single: false },
-    { baseUrl: "https://reading.snssdk.com", path: paths.multiVideoModel, single: false },
-    { baseUrl: "https://api5-normal.fqnovel.com", path: paths.videoModel, single: true },
+    {
+      biz: {
+        detail_page_version: 0,
+        device_level: 3,
+        disable_digg_stat: false,
+        need_all_video_definition: true,
+        need_mp4_align: false,
+        use_os_player: false,
+        use_server_dns: false,
+        video_platform: 1024,
+      },
+      endpoints: [
+        { baseUrl: appBaseUrl, path: paths.multiVideoModel, single: false },
+        { baseUrl: "https://reading.snssdk.com", path: paths.multiVideoModel, single: false },
+        { baseUrl: "https://reading.snssdk.com", path: paths.videoModel, single: true },
+        { baseUrl: "https://api5-normal.fqnovel.com", path: paths.multiVideoModel, single: false },
+      ],
+    },
+    {
+      biz: { need_all_video_definition: true, video_platform: 3 },
+      endpoints: [
+        { baseUrl: appBaseUrl, path: paths.videoModel, single: true },
+        { baseUrl: "https://reading.snssdk.com", path: paths.videoModel, single: true },
+        { baseUrl: appBaseUrl, path: paths.multiVideoModel, single: false },
+        { baseUrl: "https://reading.snssdk.com", path: paths.multiVideoModel, single: false },
+        { baseUrl: "https://api5-normal.fqnovel.com", path: paths.videoModel, single: true },
+      ],
+    },
   ];
   let lastError = null;
-  for (const route of routes) {
-    try {
-      const payload = route.single
-        ? { video_id: videoId, content_type: 1, biz_param: biz }
-        : { biz_param: biz, mixed_video_id_map: { 1004: [videoId] } };
-      const result = appRequest("POST", route.path, null, payload, {
-        helper,
-        baseUrl: route.baseUrl,
-        gorgonOnly: route.single,
-      });
-      const data = nested(result, "data");
-      const entry = route.single
-        ? data
-        : isRecord(data[videoId]) ? data[videoId] : {};
-      let model = isRecord(entry.video_model) ? entry.video_model : null;
-      if (typeof entry.video_model === "string" && entry.video_model !== "") {
-        let encoded = entry.video_model;
-        const decoded = decodeBase64Text(encoded);
-        if (decoded !== null && decoded !== "") {
-          encoded = decoded;
+  for (const group of routes) {
+    for (const route of group.endpoints) {
+      try {
+        const payload = route.single
+          ? { video_id: videoId, content_type: 1, biz_param: group.biz }
+          : { biz_param: group.biz, mixed_video_id_map: { 1004: [videoId] } };
+        const result = appRequest("POST", route.path, null, payload, {
+          helper,
+          baseUrl: route.baseUrl,
+        });
+        const data = nested(result, "data");
+        const entry = route.single
+          ? data
+          : isRecord(data[videoId]) ? data[videoId] : {};
+        let model = isRecord(entry.video_model) ? entry.video_model : null;
+        if (typeof entry.video_model === "string" && entry.video_model !== "") {
+          let encoded = entry.video_model;
+          const decoded = decodeBase64Text(encoded);
+          if (decoded !== null && decoded !== "") {
+            encoded = decoded;
+          }
+          try {
+            model = parseJson(encoded);
+          } catch (error) {
+            model = null;
+          }
         }
-        try {
-          model = parseJson(encoded);
-        } catch (error) {
-          model = null;
+        if (isEmptyRecord(model) && anyList(entry.video_list).length > 0) {
+          model = {
+            video_list: entry.video_list,
+            video_duration: entry.video_duration,
+            duration: entry.duration,
+          };
         }
-      }
-      if (isEmptyRecord(model) && anyList(entry.video_list).length > 0) {
-        model = {
-          video_list: entry.video_list,
-          video_duration: entry.video_duration,
-          duration: entry.duration,
-        };
-      }
-      if (!isRecord(model) || isEmptyRecord(model)) {
-        throw failure("红果播放接口未返回本集视频模型", { noCompatibleMedia: true });
-      }
-      return selectAppMedia(model);
-    } catch (error) {
-      lastError = error;
-      if (error.backoff || error.timeout) {
-        throw error;
+        if (!isRecord(model) || isEmptyRecord(model)) {
+          throw failure("红果播放接口未返回本集视频模型", { noCompatibleMedia: true });
+        }
+        return selectAppMedia(model);
+      } catch (error) {
+        lastError = error;
+        if (error.backoff || error.timeout) {
+          throw error;
+        }
       }
     }
   }
