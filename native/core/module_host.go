@@ -1,6 +1,8 @@
 package core
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -9,6 +11,7 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -188,6 +191,17 @@ func (p *jsProvider) hostUtilities(instance *jsInstance) map[string]any {
 		"sha256": func(data goja.Value) goja.Value {
 			sum := sha256.Sum256(bytesOf(data))
 			return bytesValue(sum[:])
+		},
+		"sha512": func(data goja.Value) goja.Value {
+			sum := sha512.Sum512(bytesOf(data))
+			return bytesValue(sum[:])
+		},
+		"gzipCompress": func(data goja.Value) (goja.Value, error) {
+			var output bytes.Buffer
+			writer := gzip.NewWriter(&output)
+			if _, err := writer.Write(bytesOf(data)); err != nil { return nil, err }
+			if err := writer.Close(); err != nil { return nil, err }
+			return bytesValue(output.Bytes()), nil
 		},
 		"randomBytes": func(size int) (goja.Value, error) {
 			if size < 0 || size > moduleRandomBytes {
