@@ -145,16 +145,6 @@ class AppearanceSettings extends StatelessWidget {
               ),
               const Divider(indent: 16, endIndent: 16),
               SwitchTile(
-                title: '在主页底栏显示模块',
-                subtitle: '关闭后隐藏主页底栏的模块入口，不影响模块已安装和运行',
-                value: store.showModulesTab,
-                onChanged: (value) => saveSetting(
-                  context,
-                  () => store.setShowModulesTab(value),
-                ),
-              ),
-              const Divider(indent: 16, endIndent: 16),
-              SwitchTile(
                 title: '在主页显示模糊封面按钮',
                 subtitle: '发现页站源按钮左边显示眼睛按钮，点一下模糊封面，再点恢复',
                 value: store.blurCoversButton,
