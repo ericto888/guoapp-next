@@ -366,7 +366,7 @@ module.exports = {
 	ctx := context.Background()
 	searcher, _ := providerAs[Searcher](p)
 	items, _, err := searcher.Search(ctx, 1, "x")
-	want := "0123456789abcdef|红果|rejected|true|65|3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+	want := "0123456789abcdef|红果|rejected|true|65|3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865|1f8b|ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f|746305100000:134"
 	if err != nil || len(items) != 1 || items[0].Title != want {
 		t.Fatalf("crypto = %+v, %v", items, err)
 	}
