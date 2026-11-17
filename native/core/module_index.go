@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,6 +28,7 @@ var (
 		"https://cdn.jsdelivr.net/gh/guoapp-modules/index@main/index.json",
 	}
 	moduleExtraIndexAddresses = []string{
+		"https://api.github.com/repos/ericto888/guoapp-sources-index/contents/index.json",
 		"https://raw.githubusercontent.com/ericto888/guoapp-sources-index/main/index.json",
 		"https://cdn.jsdelivr.net/gh/ericto888/guoapp-sources-index@main/index.json",
 	}
@@ -80,6 +82,17 @@ func (entry moduleIndexEntry) usable() bool {
 }
 
 func parseModuleIndex(raw []byte) ([]moduleIndexEntry, error) {
+	var envelope struct {
+		Encoding string `json:"encoding"`
+		Content  string `json:"content"`
+	}
+	if json.Unmarshal(raw, &envelope) == nil && envelope.Encoding == "base64" && strings.TrimSpace(envelope.Content) != "" {
+		decoded, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(envelope.Content), ""))
+		if err != nil {
+			return nil, errors.New("索引编码无效")
+		}
+		raw = decoded
+	}
 	var index struct {
 		Format  int                `json:"format"`
 		Modules []moduleIndexEntry `json:"modules"`

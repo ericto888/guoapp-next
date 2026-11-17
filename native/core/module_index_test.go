@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -14,6 +15,30 @@ import (
 	"testing"
 	"testing/fstest"
 )
+
+func TestParseModuleIndexFromContentsAPI(t *testing.T) {
+	index, err := json.Marshal(map[string]any{"format": moduleIndexFormat, "modules": []moduleIndexEntry{{
+		ID: "jsexample", Name: "示例", Version: "1.0.0", API: moduleAPIVersion,
+		Repo: "owner/jsexample", Tag: "v1.0.0", SHA256: map[string]string{
+			moduleManifest: strings.Repeat("a", 64),
+			moduleEntry:    strings.Repeat("b", 64),
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := json.Marshal(map[string]string{
+		"encoding": "base64",
+		"content":  base64.StdEncoding.EncodeToString(index),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := parseModuleIndex(envelope)
+	if err != nil || len(entries) != 1 || entries[0].ID != "jsexample" {
+		t.Fatalf("entries = %+v, %v", entries, err)
+	}
+}
 
 func TestModuleIndexInstallFallsBackAndVerifies(t *testing.T) {
 	example := filepath.Join("..", "module_example", "jsexample")
