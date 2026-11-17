@@ -81,7 +81,7 @@ func (d *Downloader) installBundledModulesLocked() {
 			continue
 		}
 		if installed, err := readModule(filepath.Join(d.moduleRoot(), id)); err == nil &&
-			!shouldReplaceBundledModule(module.manifest.Version, installed.manifest.Version) {
+			!newerModuleVersion(module.manifest.Version, installed.manifest.Version) {
 			continue
 		}
 		if err := d.writeModuleLocked(id, module.raw, module.code); err != nil {
@@ -130,35 +130,23 @@ func (d *Downloader) markBundledRemoved(id string, removed bool) error {
 	return os.WriteFile(filepath.Join(d.moduleRoot(), bundledRemovedFile), raw, 0o600)
 }
 
-// shouldReplaceBundledModule also migrates legacy built-in modules whose
-// version was incorrectly populated with the Flutter app release (for example
-// 2.0.0+112 or 2.0.2+121). The app release is not a module version, so it is
-// replaced by the bundled module's own valid version.
-func shouldReplaceBundledModule(candidate, current string) bool {
-	if newerModuleVersion(candidate, current) {
-		return true
-	}
-	return moduleVersionNumbers(current) == nil && moduleVersionNumbers(candidate) != nil
-}
-
-func moduleVersionNumbers(version string) []int {
-	parts := strings.Split(version, ".")
-	if len(parts) != 3 {
-		return nil
-	}
-	numbers := make([]int, 3)
-	for index, part := range parts {
-		number, err := strconv.Atoi(part)
-		if err != nil || number < 0 {
+func newerModuleVersion(candidate, current string) bool {
+	parse := func(version string) []int {
+		parts := strings.Split(version, ".")
+		if len(parts) != 3 {
 			return nil
 		}
-		numbers[index] = number
+		numbers := make([]int, 3)
+		for index, part := range parts {
+			number, err := strconv.Atoi(part)
+			if err != nil || number < 0 {
+				return nil
+			}
+			numbers[index] = number
+		}
+		return numbers
 	}
-	return numbers
-}
-
-func newerModuleVersion(candidate, current string) bool {
-	next, installed := moduleVersionNumbers(candidate), moduleVersionNumbers(current)
+	next, installed := parse(candidate), parse(current)
 	return next != nil && installed != nil && slices.Compare(next, installed) > 0
 }
 
