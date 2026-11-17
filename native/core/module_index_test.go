@@ -58,10 +58,13 @@ func TestModuleIndexInstallFallsBackAndVerifies(t *testing.T) {
 		}
 	}))
 	t.Cleanup(server.Close)
-	addresses, patterns := moduleIndexAddresses, moduleFileAddresses
+	addresses, extra, patterns := moduleIndexAddresses, moduleExtraIndexAddresses, moduleFileAddresses
 	moduleIndexAddresses = []string{server.URL + "/broken/index.json", server.URL + "/index.json"}
+	moduleExtraIndexAddresses = nil
 	moduleFileAddresses = []string{server.URL + "/stale/%s/%s/%s", server.URL + "/files/%s/%s/%s"}
-	t.Cleanup(func() { moduleIndexAddresses, moduleFileAddresses = addresses, patterns })
+	t.Cleanup(func() {
+		moduleIndexAddresses, moduleExtraIndexAddresses, moduleFileAddresses = addresses, extra, patterns
+	})
 
 	engine := &nativeEngine{downloader: &Downloader{cfg: Config{dataDir: t.TempDir()}, client: server.Client()}, cacheDirectory: t.TempDir()}
 	ctx := context.Background()
@@ -69,21 +72,21 @@ func TestModuleIndexInstallFallsBackAndVerifies(t *testing.T) {
 	if err != nil || mirror != 1 || len(entries) != 3 || entries[0].ID != "jsexample" || entries[1].ID != "renamed" || entries[2].ID != "tampered" {
 		t.Fatalf("index = %+v, %v", entries, err)
 	}
-	info, err := engine.prepareModule(ctx, "", "", "jsexample", false)
+	info, err := engine.prepareModule(ctx, "", "", "", "jsexample", false)
 	if err != nil || info.ID != "jsexample" || info.Token == "" || staleHits.Load() != 0 {
 		t.Fatalf("prepare = %+v, %v, stale hits %d", info, err, staleHits.Load())
 	}
 	moduleFileAddresses = []string{server.URL + "/files/%s/%s/%s", server.URL + "/stale/%s/%s/%s"}
-	if info, err := engine.prepareModule(ctx, "", "", "jsexample", false); err != nil || info.ID != "jsexample" || staleHits.Load() != 2 {
+	if info, err := engine.prepareModule(ctx, "", "", "", "jsexample", false); err != nil || info.ID != "jsexample" || staleHits.Load() != 2 {
 		t.Fatalf("fallback prepare = %+v, %v, stale hits %d", info, err, staleHits.Load())
 	}
-	if _, err := engine.prepareModule(ctx, "", "", "renamed", false); err == nil || !strings.Contains(err.Error(), "实际是模块 jsexample") {
+	if _, err := engine.prepareModule(ctx, "", "", "", "renamed", false); err == nil || !strings.Contains(err.Error(), "实际是模块 jsexample") {
 		t.Fatalf("renamed error = %v", err)
 	}
-	if _, err := engine.prepareModule(ctx, "", "", "tampered", false); err == nil || !strings.Contains(err.Error(), "校验不符") {
+	if _, err := engine.prepareModule(ctx, "", "", "", "tampered", false); err == nil || !strings.Contains(err.Error(), "校验不符") {
 		t.Fatalf("tampered error = %v", err)
 	}
-	if _, err := engine.prepareModule(ctx, "", "", "future", false); err == nil || !strings.Contains(err.Error(), "没有 future") {
+	if _, err := engine.prepareModule(ctx, "", "", "", "future", false); err == nil || !strings.Contains(err.Error(), "没有 future") {
 		t.Fatalf("future error = %v", err)
 	}
 
@@ -98,13 +101,13 @@ func TestModuleIndexInstallFallsBackAndVerifies(t *testing.T) {
 	if err != nil || len(items) != 4 || !items[0].Bundled || items[0].Version != "0.9.0" || items[1].Bundled || items[1].ID != "jsexample" {
 		t.Fatalf("store with bundled and indexed copies = %+v, %v", items, err)
 	}
-	if info, err := engine.prepareModule(ctx, "", "", "jsexample", true); err != nil || info.Version != "0.9.0" {
+	if info, err := engine.prepareModule(ctx, "", "", "", "jsexample", true); err != nil || info.Version != "0.9.0" {
 		t.Fatalf("bundled prepare = %+v, %v", info, err)
 	}
-	if info, err := engine.prepareModule(ctx, "", "", "jsexample", false); err != nil || info.Version != "1.0.0" {
+	if info, err := engine.prepareModule(ctx, "", "", "", "jsexample", false); err != nil || info.Version != "1.0.0" {
 		t.Fatalf("indexed prepare beside bundled = %+v, %v", info, err)
 	}
-	if _, err := engine.prepareModule(ctx, "", "", "renamed", true); err == nil || !strings.Contains(err.Error(), "没有内置 renamed") {
+	if _, err := engine.prepareModule(ctx, "", "", "", "renamed", true); err == nil || !strings.Contains(err.Error(), "没有内置 renamed") {
 		t.Fatalf("missing bundled error = %v", err)
 	}
 	if _, err := parseModuleIndex([]byte(`{"format": 2, "modules": []}`)); err == nil || !strings.Contains(err.Error(), "更新应用") {

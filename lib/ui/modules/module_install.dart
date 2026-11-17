@@ -45,6 +45,7 @@ Future<String> installIndexedModules(
         store,
         await repository.prepareModule(
           indexed: entry.id,
+          store: entry.store,
           bundled: entry.bundled,
         ),
         enable: enable,

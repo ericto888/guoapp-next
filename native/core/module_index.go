@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -25,6 +26,10 @@ var (
 		"https://raw.githubusercontent.com/guoapp-modules/index/main/index.json",
 		"https://cdn.jsdelivr.net/gh/guoapp-modules/index@main/index.json",
 	}
+	moduleExtraIndexAddresses = []string{
+		"https://raw.githubusercontent.com/ericto888/guoapp-sources-index/main/index.json",
+		"https://cdn.jsdelivr.net/gh/ericto888/guoapp-sources-index@main/index.json",
+	}
 	moduleFileAddresses = []string{
 		"https://raw.githubusercontent.com/%s/%s/%s",
 		"https://cdn.jsdelivr.net/gh/%s@%s/%s",
@@ -33,6 +38,25 @@ var (
 	moduleIndexTag  = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 	moduleIndexHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
+
+const (
+	moduleStoreOfficial = "官方商店"
+	moduleStoreCustom   = "自建商店"
+	moduleStoreBundled  = "内置"
+)
+
+type moduleStoreSource struct {
+	Name      string
+	Addresses []string
+}
+
+func moduleStoreSources() []moduleStoreSource {
+	sources := []moduleStoreSource{{Name: moduleStoreOfficial, Addresses: moduleIndexAddresses}}
+	if len(moduleExtraIndexAddresses) > 0 {
+		sources = append(sources, moduleStoreSource{Name: moduleStoreCustom, Addresses: moduleExtraIndexAddresses})
+	}
+	return sources
+}
 
 type moduleIndexEntry struct {
 	ID          string            `json:"id"`
@@ -45,6 +69,8 @@ type moduleIndexEntry struct {
 	Tag         string            `json:"tag"`
 	SHA256      map[string]string `json:"sha256"`
 	Bundled     bool              `json:"bundled,omitempty"`
+	Store       string            `json:"store,omitempty"`
+	mirror      int
 }
 
 func (entry moduleIndexEntry) usable() bool {
@@ -74,8 +100,12 @@ func parseModuleIndex(raw []byte) ([]moduleIndexEntry, error) {
 }
 
 func (engine *nativeEngine) moduleIndex(ctx context.Context) ([]moduleIndexEntry, int, error) {
+	return engine.moduleIndexFrom(ctx, moduleIndexAddresses)
+}
+
+func (engine *nativeEngine) moduleIndexFrom(ctx context.Context, addresses []string) ([]moduleIndexEntry, int, error) {
 	var failures []string
-	for mirror, address := range moduleIndexAddresses {
+	for mirror, address := range addresses {
 		raw, err := engine.fetchModuleResource(ctx, address, moduleIndexBytes)
 		if err == nil {
 			var entries []moduleIndexEntry
@@ -88,21 +118,62 @@ func (engine *nativeEngine) moduleIndex(ctx context.Context) ([]moduleIndexEntry
 	return nil, 0, fmt.Errorf("读取模块索引失败：%s", strings.Join(failures, "；"))
 }
 
+func (engine *nativeEngine) moduleIndexes(ctx context.Context) ([]moduleIndexEntry, []string) {
+	sources := moduleStoreSources()
+	type sourceResult struct {
+		entries []moduleIndexEntry
+		mirror  int
+		err     error
+	}
+	results := make([]sourceResult, len(sources))
+	var wait sync.WaitGroup
+	for index, source := range sources {
+		wait.Add(1)
+		go func(index int, source moduleStoreSource) {
+			defer wait.Done()
+			results[index].entries, results[index].mirror, results[index].err =
+				engine.moduleIndexFrom(ctx, source.Addresses)
+		}(index, source)
+	}
+	wait.Wait()
+
+	var entries []moduleIndexEntry
+	var warnings []string
+	seen := map[string]bool{}
+	for index, source := range sources {
+		result := results[index]
+		if result.err != nil {
+			warnings = append(warnings, fmt.Sprintf("%s：%v", source.Name, result.err))
+			continue
+		}
+		for _, entry := range result.entries {
+			if seen[entry.ID] {
+				continue
+			}
+			entry.Store = source.Name
+			entry.mirror = result.mirror
+			seen[entry.ID] = true
+			entries = append(entries, entry)
+		}
+	}
+	return entries, warnings
+}
+
 func (engine *nativeEngine) moduleStore(ctx context.Context) (map[string]any, error) {
-	entries, _, err := engine.moduleIndex(ctx)
+	entries, warnings := engine.moduleIndexes(ctx)
 	bundled := bundledIndexEntries()
-	if err != nil && len(bundled) == 0 {
-		return nil, err
+	if len(entries) == 0 && len(bundled) == 0 && len(warnings) > 0 {
+		return nil, errors.New(strings.Join(warnings, "；"))
 	}
 	items := append(bundled, entries...)
 	result := map[string]any{"items": items}
-	if err != nil {
-		result["warning"] = err.Error()
+	if len(warnings) > 0 {
+		result["warning"] = strings.Join(warnings, "；")
 	}
 	return result, nil
 }
 
-func (engine *nativeEngine) indexedModulePackage(ctx context.Context, id string, bundled bool) ([]byte, error) {
+func (engine *nativeEngine) indexedModulePackage(ctx context.Context, store, id string, bundled bool) ([]byte, error) {
 	if bundled {
 		modules, _ := readBundledModules()
 		if modules[id].raw == nil {
@@ -110,25 +181,37 @@ func (engine *nativeEngine) indexedModulePackage(ctx context.Context, id string,
 		}
 		return zipModuleFiles(modules[id].raw, modules[id].code)
 	}
-	entries, mirror, err := engine.moduleIndex(ctx)
+	if store == "" {
+		entries, mirror, err := engine.moduleIndex(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.ID == id {
+				return engine.fetchIndexedEntry(ctx, entry, mirror)
+			}
+		}
+		return nil, fmt.Errorf("模块索引里没有 %s", id)
+	}
+	entries, _ := engine.moduleIndexes(ctx)
+	for _, entry := range entries {
+		if entry.ID == id && entry.Store == store {
+			return engine.fetchIndexedEntry(ctx, entry, entry.mirror)
+		}
+	}
+	return nil, fmt.Errorf("%s里没有 %s", store, id)
+}
+
+func (engine *nativeEngine) fetchIndexedEntry(ctx context.Context, entry moduleIndexEntry, mirror int) ([]byte, error) {
+	manifest, err := engine.fetchIndexedFile(ctx, entry, mirror, moduleManifest, moduleManifestBytes)
 	if err != nil {
 		return nil, err
 	}
-	for _, entry := range entries {
-		if entry.ID != id {
-			continue
-		}
-		manifest, err := engine.fetchIndexedFile(ctx, entry, mirror, moduleManifest, moduleManifestBytes)
-		if err != nil {
-			return nil, err
-		}
-		code, err := engine.fetchIndexedFile(ctx, entry, mirror, moduleEntry, moduleEntryBytes)
-		if err != nil {
-			return nil, err
-		}
-		return zipModuleFiles(manifest, code)
+	code, err := engine.fetchIndexedFile(ctx, entry, mirror, moduleEntry, moduleEntryBytes)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("模块索引里没有 %s", id)
+	return zipModuleFiles(manifest, code)
 }
 
 func (engine *nativeEngine) fetchIndexedFile(ctx context.Context, entry moduleIndexEntry, mirror int, name string, limit int) ([]byte, error) {

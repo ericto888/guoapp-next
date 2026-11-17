@@ -80,6 +80,7 @@ type nativeInput struct {
 	Cache           string                  `json:"cache"`
 	Downloads       string                  `json:"downloads"`
 	Source          string                  `json:"source"`
+	Store           string                  `json:"store"`
 	Page            int                     `json:"page"`
 	Query           string                  `json:"query"`
 	Category        string                  `json:"category"`
@@ -387,7 +388,7 @@ func nativeDispatch(input nativeInput) (any, error) {
 	case "moduleIndex":
 		return engine.moduleStore(ctx)
 	case "prepareModule":
-		return engine.prepareModule(ctx, input.File, input.URL, input.Source, input.Bundled)
+		return engine.prepareModule(ctx, input.File, input.URL, input.Store, input.Source, input.Bundled)
 	case "installModule":
 		return engine.installModule(input.Token)
 	case "uninstallModule":

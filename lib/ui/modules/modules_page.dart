@@ -60,6 +60,7 @@ class _ModulesPageState extends State<ModulesPage>
   String? _error;
   ModuleStore? _index;
   String? _indexError;
+  String? _storeFilter;
   bool _busy = false;
 
   LocalStore get _store => widget.store;
@@ -139,6 +140,7 @@ class _ModulesPageState extends State<ModulesPage>
     () async => _install(
       await _repository.prepareModule(
         indexed: entry.id,
+        store: entry.store,
         bundled: entry.bundled,
       ),
     ),
@@ -310,10 +312,17 @@ class _ModulesPageState extends State<ModulesPage>
       for (final entry in _index?.entries ?? const <ModuleIndexEntry>[])
         if (entry.bundled == bundled) entry,
     ];
+    final stores = <String>{
+      for (final entry in listed)
+        if (entry.store.isNotEmpty) entry.store,
+    }.toList()..sort();
+    final activeStore = stores.contains(_storeFilter) ? _storeFilter : null;
     final entries =
         [
           for (final entry in listed)
-            if (!installed.contains(entry.id)) entry,
+            if (!installed.contains(entry.id) &&
+                (bundled || activeStore == null || entry.store == activeStore))
+              entry,
         ]..sort(
           (a, b) => (missing.containsKey(a.id) ? 0 : 1).compareTo(
             missing.containsKey(b.id) ? 0 : 1,
@@ -321,6 +330,24 @@ class _ModulesPageState extends State<ModulesPage>
         );
     return _list([
       if (warning.isNotEmpty) _Note(warning),
+      if (!bundled && stores.length > 1)
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('全部'),
+              selected: activeStore == null,
+              onSelected: (_) => setState(() => _storeFilter = null),
+            ),
+            for (final store in stores)
+              ChoiceChip(
+                label: Text(store),
+                selected: activeStore == store,
+                onSelected: (_) => setState(() => _storeFilter = store),
+              ),
+          ],
+        ),
       if (!bundled && entries.isNotEmpty)
         SettingsCard(
           children: [
@@ -574,7 +601,7 @@ class _InstalledCard extends StatelessWidget {
           if (module.description.isNotEmpty) Text(module.description),
           if (update case final update?)
             Text(
-              '可更新到 ${update.version}',
+              '可更新到 ${update.version}${update.store.isEmpty ? '' : '（${update.store}）'}',
               style: TextStyle(color: colors.primary),
             ),
         ],
@@ -642,6 +669,13 @@ class _IndexCard extends StatelessWidget {
       version: entry.version,
       id: entry.id,
       body: [
+        if (entry.store.isNotEmpty)
+          Text(
+            '来源：${entry.store}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
         if (entry.description.isNotEmpty) Text(entry.description),
         if (records != null)
           Text('待恢复：$records', style: TextStyle(color: colors.primary)),

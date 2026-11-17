@@ -47,6 +47,7 @@ class ModuleIndexEntry {
     required this.version,
     this.description = '',
     this.repo = '',
+    this.store = '',
     this.adult = false,
     this.bundled = false,
   });
@@ -57,6 +58,7 @@ class ModuleIndexEntry {
         version: json['version'] as String? ?? '',
         description: json['description'] as String? ?? '',
         repo: json['repo'] as String? ?? '',
+        store: json['store'] as String? ?? '',
         adult: json['adult'] == true,
         bundled: json['bundled'] == true,
       );
@@ -65,6 +67,7 @@ class ModuleIndexEntry {
   final String version;
   final String description;
   final String repo;
+  final String store;
   final bool adult;
   final bool bundled;
 }
