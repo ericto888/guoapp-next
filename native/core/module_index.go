@@ -106,7 +106,12 @@ func (engine *nativeEngine) moduleIndex(ctx context.Context) ([]moduleIndexEntry
 func (engine *nativeEngine) moduleIndexFrom(ctx context.Context, addresses []string) ([]moduleIndexEntry, int, error) {
 	var failures []string
 	for mirror, address := range addresses {
-		raw, err := engine.fetchModuleResource(ctx, address, moduleIndexBytes)
+		separator := "?"
+		if strings.Contains(address, "?") {
+			separator = "&"
+		}
+		fetchAddress := fmt.Sprintf("%s%st=%d", address, separator, time.Now().UnixNano())
+		raw, err := engine.fetchModuleResource(ctx, fetchAddress, moduleIndexBytes)
 		if err == nil {
 			var entries []moduleIndexEntry
 			if entries, err = parseModuleIndex(raw); err == nil {
