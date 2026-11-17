@@ -78,7 +78,10 @@ class PlaybackSession extends ChangeNotifier {
       if (_closed || !_acceptErrors || _loading || _error != null) return;
       if (_health.stalled(
         position: player.state.position,
-        playing: player.state.playing && _playIntent,
+        // 缓冲中即使 mpv 暂时报 playing=false，也说明用户仍有播放意图；
+        // 否则卡在缓冲时停滞检测永远不会触发。
+        playing:
+            _playIntent && (player.state.playing || player.state.buffering),
         foreground: _foreground,
         now: DateTime.now(),
       )) {
@@ -672,6 +675,12 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
+  void _restoreErrorHandling() {
+    if (!_closed && _usable && _error == null) {
+      _acceptErrors = true;
+    }
+  }
+
   Future<void> _release(String session) async {
     if (session.isEmpty) return;
     await repository.release(session).catchError((Object _) {});
@@ -821,16 +830,18 @@ class PlaybackSession extends ChangeNotifier {
         _streamEpoch = plan.streamEpoch;
         installed = true;
         _acceptErrors = true;
-        await player.open(
-          Media(
-            plan.url,
-            httpHeaders: plan.headers,
-            start: position > 0
-                ? Duration(milliseconds: (position * 1000).round())
-                : null,
-          ),
-          play: _foreground && _playIntent,
-        );
+        await player
+            .open(
+              Media(
+                plan.url,
+                httpHeaders: plan.headers,
+                start: position > 0
+                    ? Duration(milliseconds: (position * 1000).round())
+                    : null,
+              ),
+              play: _foreground && _playIntent,
+            )
+            .timeout(const Duration(seconds: 15));
         if (!_current(ticket)) return;
         _openedIndex = index;
         _health.reset();
@@ -845,6 +856,8 @@ class PlaybackSession extends ChangeNotifier {
       if (_current(ticket)) {
         if (prepared != null && identical(_plan, prepared)) {
           _acceptErrors = true;
+          _loading = false;
+          _notify();
           _queueRecovery('open_exception');
         } else {
           if (prepared != null) await _release(prepared.session);
@@ -1056,14 +1069,16 @@ class PlaybackSession extends ChangeNotifier {
     if (!_usable || !ready) return;
     endBoost();
     _restoreToken++;
-    _playIntent = !player.state.playing;
+    _playIntent = !_playIntent;
     _resumeIntent = _playIntent;
     _health.reset();
     if (_playIntent) {
       _cancelStandbyIdle();
       final paused = _takePausedSeconds();
       if (paused >= 5) DiaryService.add('[Play] 恢复播放，已暂停 $paused 秒');
-      if (!local && paused >= 5) _armResumeWatchdog();
+      if (!local && (paused >= 5 || _stalled || player.state.buffering)) {
+        _armResumeWatchdog();
+      }
       _holdNetworkSpeed();
     } else {
       _cancelResumeWatchdog();
@@ -1082,17 +1097,18 @@ class PlaybackSession extends ChangeNotifier {
           player
               .seek(position)
               .then(
-                (_) => player.state.playing
-                    ? Future<void>.value()
-                    : player.playOrPause(),
+                (_) =>
+                    player.state.playing ? Future<void>.value() : player.play(),
               )
               .catchError((Object _) {}),
         );
       } else {
-        unawaited(player.playOrPause());
+        unawaited(player.play());
       }
+    } else if (_playIntent) {
+      unawaited(player.play());
     } else {
-      unawaited(player.playOrPause());
+      unawaited(player.pause());
     }
     if (!_playIntent) unawaited(saveProgress());
     _syncDanmaku();
@@ -1126,28 +1142,37 @@ class PlaybackSession extends ChangeNotifier {
       _reopen(Duration(milliseconds: (_resumePosition * 1000).round()));
 
   Future<void> _reopen(Duration target) async {
+    if (_closed || _loading || _error != null || !_playIntent || !_foreground) {
+      return;
+    }
+    final ticket = _generation;
     final position = target.inMilliseconds / 1000;
     final plan = _plan;
     if (plan == null || plan.local || plan.url.isEmpty) {
-      if (!local) await play(_index, position: position);
+      if (!local && _current(ticket)) {
+        await play(_index, position: position);
+      }
       return;
     }
     try {
       _health.reset();
       _staleAudio = false;
-      await player.open(
-        Media(
-          plan.url,
-          httpHeaders: plan.headers,
-          start: position > 0
-              ? Duration(milliseconds: (position * 1000).round())
-              : null,
-        ),
-        play: _foreground && _playIntent,
-      );
+      await player
+          .open(
+            Media(
+              plan.url,
+              httpHeaders: plan.headers,
+              start: position > 0
+                  ? Duration(milliseconds: (position * 1000).round())
+                  : null,
+            ),
+            play: _foreground && _playIntent,
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!_current(ticket) || !identical(_plan, plan)) return;
       _openedIndex = _index;
     } catch (_) {
-      if (_closed) return;
+      if (_closed || !_current(ticket)) return;
       await play(_index, position: position);
     }
   }
@@ -1676,7 +1701,8 @@ class PlaybackSession extends ChangeNotifier {
           state.position > before + const Duration(milliseconds: 300)) {
         return true;
       }
-      if (!state.buffering) return false;
+      // open 刚返回时 mpv 可能短暂处于未播放且未缓冲的过渡态，
+      // 一次采样不能判定失败，继续等到窗口用完。
     }
     return false;
   }
@@ -1768,7 +1794,7 @@ class PlaybackSession extends ChangeNotifier {
       // play() 内部会自增 generation，必须用新 ticket 判断有效性。
       final liveTicket = _generation;
       if (_closed || !_foreground || !_current(liveTicket)) return;
-      final baseline = Duration(milliseconds: (position * 1000).round() - 300);
+      final baseline = Duration(milliseconds: (position * 1000).round());
       final playing = await _confirmProgress(
         baseline,
         alive: () => _current(liveTicket),
@@ -1801,6 +1827,7 @@ class PlaybackSession extends ChangeNotifier {
           );
         }
       }
+      _restoreErrorHandling();
     }
   }
 
