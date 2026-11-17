@@ -109,6 +109,23 @@ func TestBundledModulesInstallRespectRemovalAndVersions(t *testing.T) {
 	}
 }
 
+func TestShouldReplaceBundledModuleMigratesLegacyAppVersion(t *testing.T) {
+	for _, current := range []string{"2.0.0+112", "2.0.2+121"} {
+		if !shouldReplaceBundledModule("1.0.3", current) {
+			t.Fatalf("legacy app release version %q was not migrated to module 1.0.3", current)
+		}
+	}
+	if shouldReplaceBundledModule("1.0.2", "1.0.3") {
+		t.Fatal("newer installed module must not be replaced")
+	}
+	if !shouldReplaceBundledModule("1.0.3", "1.0.2") {
+		t.Fatal("newer bundled module should replace older installed module")
+	}
+	if shouldReplaceBundledModule("dev", "1.0.2") {
+		t.Fatal("invalid bundled version must not replace a valid installed module")
+	}
+}
+
 func TestNewerModuleVersion(t *testing.T) {
 	cases := []struct {
 		candidate, current string
