@@ -3,10 +3,11 @@
 本文件记录本项目（guoapp-next）相对上游 `Xanerix/guoapp` 的播放器相关改动。
 上游更新时，以下文件与行为必须保留，不得被上游版本直接覆盖。
 
-- 当前版本：`2.0.0+116`
+- 当前版本：`2.0.2+119`
 - 相关提交：
   - `1e4cee0` feat: restore iOS background playback recovery from guoapp
   - `33d2016` feat(player): 横片播放改用 guoapp 横屏页，并补 iOS 切出/锁屏恢复失败后的播放器重建（2.0.0+116）
+  - 2026-11-17 合并上游 `f5aac70`（17 个提交）后，手工把上游播放器锁接入本项目横屏信息流和竖屏播放页
 
 ## 零、冻结清单（拉取上游更新时不得改动）
 
@@ -28,12 +29,11 @@ git diff <合并前提交> -- lib/playback_session.dart lib/playback_preferences
   ios/Runner/Info.plist test/playback_session_test.dart
 ```
 
-输出应为空。若上游确实改动了这些文件，按本文档逐项手工保留，不得整文件取上游版本。
+上游也会改动这些文件（例如 2026-11-17 的播放器锁），输出不再一定为空；必须逐项确认本文档描述的行为仍在，不得整文件取上游版本。
 
 `lib/ui/settings/settings_sections.dart` 允许跟随上游重排，但必须保留播放相关设置项（如「横屏底部进度线」），且不得恢复「横屏视频也使用竖屏样式」/ `portraitStyleForWide`。
 
-最近一次验证：2026-11-16 合并上游 7 个提交（`4094795`），上述冻结文件与合并前备份
-`backup/pre-upstream-merge-20261116` 对比零差异。
+最近一次验证：2026-11-17 合并上游 17 个提交（`f5aac70`），冻结文件逐项核对，`flutter analyze` 与 `flutter test` 通过；备份分支 `backup/pre-upstream-merge-20261117`。
 
 ## 一、iOS 切出 / 锁屏恢复播放
 
@@ -66,6 +66,9 @@ git diff <合并前提交> -- lib/playback_session.dart lib/playback_preferences
 | `lib/playback_session.dart` | 新增 `nextSeason` getter（横屏页跨季滑动使用） | 上游可能已有同名实现，保留即可 |
 | `lib/playback_preferences.dart` | 删除 `portraitStyleForWide`（默认值 / 字段 / copyWith / toJson / fromJson） | 旧存档中的该键会被忽略 |
 | `lib/ui/settings/settings_sections.dart` | 删除「横屏视频也使用竖屏样式」开关 | 其余播放设置项保持不变 |
+| `lib/ui/player/player_lock.dart` | 上游新增的播放器锁按钮与遮罩 | 本项目横屏、竖屏页已接入 |
+| `lib/ui/player/landscape_player_page.dart` | 锁定后禁用轻点、长按、上下滑换集与返回，全屏时锁图标在左侧中间 | 不要覆盖本项目信息流布局 |
+| `lib/ui/player/portrait_player_page.dart` | 锁定后禁用翻页、播放控制与返回，锁图标在右上角 | 保留本项目下一季占位页与底部手势保护 |
 
 ### 与上游组件的兼容适配
 

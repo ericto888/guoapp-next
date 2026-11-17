@@ -21,6 +21,7 @@ import 'episode_grid.dart';
 import 'fade_presence.dart';
 import 'playback_sheets.dart';
 import 'playback_handle.dart';
+import 'player_lock.dart';
 import 'player_surface.dart';
 import 'player_video.dart';
 import 'swipe_controls.dart';
@@ -154,12 +155,27 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   bool get _chromeShown =>
-      !_session.store.playbackPreferences.autoHideControls ||
-      !_idle ||
-      _dragging ||
-      _session.paused ||
-      _session.error != null ||
-      _session.loading && !_quietSwitch;
+      !_session.locked &&
+      (!_session.store.playbackPreferences.autoHideControls ||
+          !_idle ||
+          _dragging ||
+          _session.paused ||
+          _session.error != null ||
+          _session.loading && !_quietSwitch);
+
+  void _lock() {
+    if (_holding) _pressEnd();
+    unawaited(HapticFeedback.selectionClick());
+    _session.setLocked(true);
+    _say('已锁定，点屏幕显示锁图标');
+  }
+
+  void _unlock() {
+    unawaited(HapticFeedback.selectionClick());
+    _session.setLocked(false);
+    _wake();
+    _say('已解锁');
+  }
 
   void _syncSystemBars() {
     final immersive =
@@ -248,6 +264,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _wheel(PointerSignalEvent event) {
+    if (_session.locked) return;
     if (event is! PointerScrollEvent || event.scrollDelta.dy == 0) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
       if (_scrolling) return;
@@ -295,6 +312,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _pointerDown(PointerDownEvent event) {
+    if (_session.locked) return;
     _pointers[event.pointer] = event.position;
     if (_pointers.length != 2) return;
     if (_holding) _pressEnd();
@@ -305,6 +323,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _pointerMove(PointerMoveEvent event) {
+    if (_session.locked) return;
     if (!_pointers.containsKey(event.pointer)) return;
     _pointers[event.pointer] = event.position;
     final from = _pinchFrom;
@@ -425,51 +444,54 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   @override
   Widget build(BuildContext context) {
     final dark = playerTheme(context);
-    final bottom = MediaQuery.paddingOf(context).bottom;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: AppTheme.systemBars(Brightness.dark),
       child: Theme(
         data: dark,
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          extendBody: true,
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              Listener(
-                onPointerDown: _pointerDown,
-                onPointerMove: _pointerMove,
-                onPointerUp: _pointerUp,
-                onPointerCancel: _pointerUp,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: _scrolled,
-                  child: PageView.builder(
-                    controller: _pages,
-                    scrollDirection: Axis.vertical,
-                    physics: _pinching
-                        ? const NeverScrollableScrollPhysics()
-                        : const _PagePhysics(),
-                    itemCount: _session.detail.episodes.length +
-                        (_session.detail.nextSeason != null ? 1 : 0),
-                    itemBuilder: _page,
+        child: PopScope(
+          canPop: !_session.locked,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) _say('已锁定，点屏幕显示锁图标');
+          },
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            extendBody: true,
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+                Listener(
+                  onPointerDown: _pointerDown,
+                  onPointerMove: _pointerMove,
+                  onPointerUp: _pointerUp,
+                  onPointerCancel: _pointerUp,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _scrolled,
+                    child: PageView.builder(
+                      controller: _pages,
+                      scrollDirection: Axis.vertical,
+                      physics: _pinching || _session.locked
+                          ? const NeverScrollableScrollPhysics()
+                          : const _PagePhysics(),
+                      itemCount:
+                          _session.detail.episodes.length +
+                          (_session.detail.nextSeason != null ? 1 : 0),
+                      itemBuilder: _page,
+                    ),
                   ),
                 ),
-              ),
-              IgnorePointer(ignoring: _scrolling, child: _controls(context)),
-              if (bottom > 0)
-                Positioned(
-                  key: const ValueKey('system-gesture-guard'),
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: bottom,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _session.togglePlayback,
-                    onVerticalDragStart: (_) {},
+                IgnorePointer(ignoring: _scrolling, child: _controls(context)),
+                PlayerLockOverlay(
+                  locked: _session.locked,
+                  alignment: Alignment.topRight,
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.paddingOf(context).top + 6,
+                    right: 12,
                   ),
+                  onUnlock: _unlock,
+                  onBlocked: () => _say('已锁定，点击锁图标解锁'),
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -542,17 +564,19 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             SwipeControls(
               key: const ValueKey('gestures'),
               session: session,
-              enabled: !_pinching,
+              enabled: !_pinching && !_session.locked,
               child: LayoutBuilder(
                 builder: (context, constraints) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: _pinching ? null : session.togglePlayback,
-                  onLongPressStart: _pinching
+                  onTap: _pinching || _session.locked
+                      ? null
+                      : session.togglePlayback,
+                  onLongPressStart: _pinching || _session.locked
                       ? null
                       : (details) => _pressStart(details, constraints.maxWidth),
-                  onLongPressMoveUpdate: _pressMove,
-                  onLongPressEnd: (_) => _pressEnd(),
-                  onLongPressCancel: _pressEnd,
+                  onLongPressMoveUpdate: _session.locked ? null : _pressMove,
+                  onLongPressEnd: _session.locked ? null : (_) => _pressEnd(),
+                  onLongPressCancel: _session.locked ? null : _pressEnd,
                 ),
               ),
             ),
@@ -633,6 +657,19 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             null => null,
           },
         ),
+        if (bottom > 0)
+          Positioned(
+            key: const ValueKey('system-gesture-guard'),
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: bottom,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: session.locked ? null : session.togglePlayback,
+              onVerticalDragStart: session.locked ? null : (_) {},
+            ),
+          ),
         Positioned(
           key: const ValueKey('header'),
           left: 4,
@@ -866,6 +903,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             ],
           ),
         ),
+        if (!desktopPlatform) PlayerLockButton(locked: false, onPressed: _lock),
         FollowIcon(
           store: widget.store,
           drama: session.detail.drama,

@@ -22,6 +22,7 @@ import '../widgets/follow_button.dart';
 import 'episode_grid.dart';
 import 'playback_handle.dart';
 import 'playback_sheets.dart';
+import 'player_lock.dart';
 import 'fade_presence.dart';
 import 'player_status.dart';
 import 'player_surface.dart';
@@ -64,6 +65,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   Timer? _streakTimer;
   Timer? _clockTimer;
   Timer? _seekTimer;
+  Timer? _hintTimer;
+  String _hint = '';
   bool? _full;
   bool _visible = true;
   bool _scrolling = false;
@@ -153,6 +156,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     _streakTimer?.cancel();
     _clockTimer?.cancel();
     _seekTimer?.cancel();
+    _hintTimer?.cancel();
     if (_holding) _session.endBoost();
     _pages.dispose();
     if (widget.onFullscreen == null) {
@@ -218,6 +222,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   }
 
   bool _scrolled(ScrollNotification notification) {
+    if (_session.locked) return false;
     if (notification.depth != 0) return false;
     final metrics = notification.metrics;
     if (notification is ScrollStartNotification &&
@@ -293,7 +298,38 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     }
   }
 
+  void _say(String text) {
+    _hintTimer?.cancel();
+    setState(() => _hint = text);
+    _hintTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _hint = '');
+    });
+  }
+
+  void _lock() {
+    if (_holding) _pressEnd();
+    _hideTimer?.cancel();
+    _tapTimer?.cancel();
+    _streakTimer?.cancel();
+    _streak = 0;
+    unawaited(HapticFeedback.selectionClick());
+    setState(() => _panel = null);
+    _session.setLocked(true);
+    _say('已锁定，点屏幕显示锁图标');
+  }
+
+  void _unlock() {
+    unawaited(HapticFeedback.selectionClick());
+    _session.setLocked(false);
+    _show();
+    _say('已解锁');
+  }
+
   void _tapUp(TapUpDetails details, double width, bool full) {
+    if (_session.locked) {
+      _say('已锁定，点屏幕显示锁图标');
+      return;
+    }
     if (!full) {
       // 竖屏手持横片：单击视频 = 暂停/播放（红果行为）。
       _session.togglePlayback();
@@ -374,7 +410,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   }
 
   void _pressStart() {
-    if (!_session.ready) return;
+    if (!_session.ready || _session.locked) return;
     _session.holdBoost();
     unawaited(HapticFeedback.selectionClick());
     setState(() => _holding = true);
@@ -406,6 +442,10 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   }
 
   void _back(bool full) {
+    if (_session.locked) {
+      _say('已锁定，点屏幕显示锁图标');
+      return;
+    }
     if (_panel != null) {
       setState(() => _panel = null);
       _scheduleHide();
@@ -460,7 +500,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       child: Builder(builder: (context) => _video(context, full)),
     );
     return PopScope(
-      canPop: !full && _panel == null,
+      canPop: !full && _panel == null && !_session.locked,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _back(full);
       },
@@ -493,7 +533,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
 
   Widget _video(BuildContext context, bool full) {
     final session = _session;
-    final visible = _visible || _pinned;
+    final locked = session.locked;
+    final visible = !locked && (_visible || _pinned);
     final sidePanel = switch (_panel) {
       final panel? when full && _sidePanel(panel) => _panelBody(context, panel),
       _ => null,
@@ -508,6 +549,9 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           child: PageView.builder(
             controller: _pages,
             scrollDirection: Axis.vertical,
+            physics: session.locked
+                ? const NeverScrollableScrollPhysics()
+                : null,
             itemCount:
                 session.detail.episodes.length +
                 (session.nextSeason != null ? 1 : 0),
@@ -632,6 +676,44 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                 child: _popup(context, panel),
               ),
             ),
+        FadePresence(
+          duration: Motion.medium,
+          child: _hint.isEmpty
+              ? null
+              : IgnorePointer(
+                  child: Align(
+                    alignment: const Alignment(0, -.5),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: .72),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _hint,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+        PlayerLockOverlay(
+          locked: locked,
+          alignment: Alignment.centerLeft,
+          padding: EdgeInsets.only(
+            left: full
+                ? math.max(MediaQuery.viewPaddingOf(context).left, 20)
+                : 6,
+          ),
+          onUnlock: _unlock,
+          onBlocked: () => _say('已锁定，点击锁图标解锁'),
+        ),
       ],
     );
   }
@@ -759,7 +841,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           ),
           SwipeControls(
             session: session,
-            enabled: full,
+            enabled: full && !session.locked,
             levels: full && session.store.playbackPreferences.swipeLevels,
             // 中间区域的上下滑用于翻集，左右两侧仍调节亮度/音量。
             verticalRegion: session.detail.episodes.length > 1
@@ -769,11 +851,12 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
             child: LayoutBuilder(
               builder: (context, constraints) => GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTapUp: (details) =>
-                    _tapUp(details, constraints.maxWidth, full),
-                onLongPressStart: (_) => _pressStart(),
-                onLongPressEnd: (_) => _pressEnd(),
-                onLongPressCancel: _pressEnd,
+                onTapUp: session.locked
+                    ? null
+                    : (details) => _tapUp(details, constraints.maxWidth, full),
+                onLongPressStart: session.locked ? null : (_) => _pressStart(),
+                onLongPressEnd: session.locked ? null : (_) => _pressEnd(),
+                onLongPressCancel: session.locked ? null : _pressEnd,
               ),
             ),
           ),
@@ -782,10 +865,10 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           // 播放中忽略指针，避免透明按钮挡住滑动/单击。
           Center(
             child: IgnorePointer(
-              ignoring: !(session.ready && session.paused),
+              ignoring: session.locked || !(session.ready && session.paused),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: session.togglePlayback,
+                onTap: session.locked ? null : session.togglePlayback,
                 child: AnimatedOpacity(
                   opacity: session.ready && session.paused ? 1 : 0,
                   duration: Motion.of(context, Motion.short),
@@ -842,6 +925,14 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
             child: _Shade(height: 150, top: false),
           ),
         ),
+        if (!desktopPlatform)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: EdgeInsets.only(left: left),
+              child: PlayerLockButton(locked: false, onPressed: _lock),
+            ),
+          ),
         Positioned(
           left: left,
           right: right,
@@ -1781,14 +1872,22 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                                   builder: (context, constraints) =>
                                       GestureDetector(
                                         behavior: HitTestBehavior.opaque,
-                                        onTapUp: (details) => _tapUp(
-                                          details,
-                                          constraints.maxWidth,
-                                          false,
-                                        ),
-                                        onLongPressStart: (_) => _pressStart(),
-                                        onLongPressEnd: (_) => _pressEnd(),
-                                        onLongPressCancel: _pressEnd,
+                                        onTapUp: session.locked
+                                            ? null
+                                            : (details) => _tapUp(
+                                                details,
+                                                constraints.maxWidth,
+                                                false,
+                                              ),
+                                        onLongPressStart: session.locked
+                                            ? null
+                                            : (_) => _pressStart(),
+                                        onLongPressEnd: session.locked
+                                            ? null
+                                            : (_) => _pressEnd(),
+                                        onLongPressCancel: session.locked
+                                            ? null
+                                            : _pressEnd,
                                       ),
                                 ),
                               ),
