@@ -1,0 +1,53 @@
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter:
+    name: Flutter format, analyze and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Check formatting of changed Dart files
+        run: dart format --output=none --set-exit-if-changed lib/playback_session.dart lib/playback_recovery.dart test/playback_session_test.dart
+      - name: Analyze Dart code
+        run: dart analyze --fatal-infos lib test
+      - name: Run Flutter tests
+        run: flutter test --dart-define=DISABLE_REMOTE_IMAGES=true
+      - name: Run Hongguo-specific Flutter tests
+        run: flutter test --dart-define=DISABLE_REMOTE_IMAGES=true --dart-define=ONLY_HONGGUO=true
+
+  go:
+    name: Go race tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/go.mod
+          cache-dependency-path: native/go.sum
+      - name: Check Go formatting
+        working-directory: native
+        run: test -z "$(gofmt -l core/app_preload.go core/app_stream.go core/app_stream_diagnostics.go)"
+      - name: Run Go race tests
+        working-directory: native
+        run: go test -race ./...
