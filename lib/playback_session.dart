@@ -406,10 +406,9 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   void _syncPreload() {
-    if (_closed) return;
+    if (_closed || _standbyCleaning) return;
     if (!_foreground ||
         _lifecycleDormant ||
-        _standbyCleaning ||
         _plan?.local == true ||
         !ready ||
         _openedIndex != _index ||
@@ -1001,15 +1000,15 @@ class PlaybackSession extends ChangeNotifier {
     // alive until media_kit can no longer read its local stream URL.
     final queued = _standbyCleanup.catchError((Object _) {}).then((_) async {
       var safeToRelease = true;
-      if (standby != null && plan != null) {
-        if (opening != null) {
+      if (standby != null) {
+        if (plan != null && opening != null) {
           try {
             await opening.timeout(const Duration(milliseconds: 1500));
           } catch (_) {
             safeToRelease = false;
           }
         }
-        if (safeToRelease) {
+        if (safeToRelease && plan != null) {
           try {
             await standby.stop().timeout(const Duration(milliseconds: 1500));
           } catch (_) {
