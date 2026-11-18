@@ -626,38 +626,38 @@ void main() {
   test(
     'iOS dead stream is probed before old player play and rebuilds directly',
     () async {
-    final repository = _PlaybackRepository()..streamAlive = false;
-    final store = await openStore();
-    final player = _AdvancingPlayer();
-    final rebuilt = FakePlayer();
-    final session = PlaybackSession(
-      repository: repository,
-      store: store,
-      detail: dramaDetail(_show, count: 3),
-      player: player,
-      respawn: () => rebuilt,
-      index: 0,
-      position: 9.5,
-      isIOS: true,
-    );
-    addTearDown(() {
-      if (_closed.add(session)) session.dispose();
-    });
-    await pumpEventQueue();
+      final repository = _PlaybackRepository()..streamAlive = false;
+      final store = await openStore();
+      final player = _AdvancingPlayer();
+      final rebuilt = FakePlayer();
+      final session = PlaybackSession(
+        repository: repository,
+        store: store,
+        detail: dramaDetail(_show, count: 3),
+        player: player,
+        respawn: () => rebuilt,
+        index: 0,
+        position: 9.5,
+        isIOS: true,
+      );
+      addTearDown(() {
+        if (_closed.add(session)) session.dispose();
+      });
+      await pumpEventQueue();
 
-    session.onLifecycleEvent(AppLifecycleState.inactive, source: 'test');
-    session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
-    session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+      session.onLifecycleEvent(AppLifecycleState.inactive, source: 'test');
+      session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
+      session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
+      await Future<void>.delayed(const Duration(milliseconds: 300));
 
-    expect(repository.statusCalls, 2);
-    expect(
-      player.playCalls,
-      0,
-      reason: 'dead listener must be detected before old play',
-    );
-    expect(identical(session.player, rebuilt), isTrue);
-    expect(rebuilt.opened.single.start, _seconds(9.5));
+      expect(repository.statusCalls, 2);
+      expect(
+        player.playCalls,
+        0,
+        reason: 'dead listener must be detected before old play',
+      );
+      expect(identical(session.player, rebuilt), isTrue);
+      expect(rebuilt.opened.single.start, _seconds(9.5));
     },
   );
 
