@@ -51,7 +51,9 @@ class PlaybackSession extends ChangeNotifier {
     required int index,
     double position = 0,
     bool autoplay = true,
+    @visibleForTesting bool? isIOS,
   }) : _player = player,
+       _isIOS = isIOS ?? Platform.isIOS,
        _engaged = autoplay,
        _index = index,
        _epoch = store.profileEpoch {
@@ -186,6 +188,7 @@ class PlaybackSession extends ChangeNotifier {
   final LocalStore store;
   DramaDetail detail;
   Player _player;
+  final bool _isIOS;
   Player? _standby;
 
   /// 切出/锁屏后底层实例可能已被系统回收，恢复播放前需要重建播放器。
@@ -1691,6 +1694,28 @@ class PlaybackSession extends ChangeNotifier {
     }
     if (!_lifecycleRestoreValid(token, generation)) return;
 
+    // iOS 挂起期间可能回收本机 HTTP listener。必须在旧播放器 play() 前
+    // 探活，否则旧缓冲区可能让画面短暂推进，随后才发现 listener 已失效并闪屏重建。
+    final plan = _plan;
+    if (_isIOS && plan != null && !plan.local) {
+      final probe = await _probeStream();
+      if (!_lifecycleRestoreValid(token, generation) || index != _index) return;
+      final epochChanged =
+          probe == _StreamProbe.alive && plan.streamEpoch != _streamEpoch;
+      if (probe == _StreamProbe.dead || epochChanged) {
+        final live = currentPosition;
+        final resumeAt = live > _resumePosition ? live : _resumePosition;
+        DiaryService.add(
+          '[Play] 回前台后本机取流失效，直接重建播放器 探活=${probe.name} '
+          '代次=${plan.streamEpoch}/$_streamEpoch',
+        );
+        _resumePosition = resumeAt;
+        await _rebuildAndResume(resumeAt, true, token: token);
+        return;
+      }
+      // unknown 不等于 dead：网络探活不确定时，保留旧播放器原地恢复路径。
+    }
+
     _playIntent = true;
     _sync();
     _notify();
@@ -1712,25 +1737,6 @@ class PlaybackSession extends ChangeNotifier {
         final state = player.state;
         if (state.playing &&
             state.position > before + const Duration(milliseconds: 250)) {
-          final plan = _plan;
-          if (Platform.isIOS && plan != null && !plan.local) {
-            // 缓冲区里的旧数据会让位置短暂推进，但挂起期间监听可能已被回收，
-            // 缓冲耗尽后只会得到 connection refused，所以这里必须探活一次。
-            final probe = await _probeStream();
-            if (!_lifecycleRestoreValid(token, generation) || index != _index) {
-              return;
-            }
-            if (probe == _StreamProbe.dead ||
-                plan.streamEpoch != _streamEpoch) {
-              DiaryService.add(
-                '[Play] 回前台后本机取流失效，重建播放器 探活=${probe.name} '
-                '代次=${plan.streamEpoch}/$_streamEpoch',
-              );
-              _resumePosition = state.position.inMilliseconds / 1000;
-              await _rebuildAndResume(_resumePosition, true, token: token);
-              return;
-            }
-          }
           DiaryService.add('[Play] 前台原地恢复成功 位置=${state.position}');
           _resumePosition = state.position.inMilliseconds / 1000;
           _health.reset();
