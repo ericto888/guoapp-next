@@ -1956,7 +1956,6 @@ class PlaybackSession extends ChangeNotifier {
     danmaku.dispose();
     _preloader.dispose();
     final session = _plan?.session ?? '';
-    unawaited(_release(session));
     final standby = _standby;
     _standby = null;
     final standbyCleanup = _dropStandby(target: standby, retire: true);
