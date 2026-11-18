@@ -587,7 +587,11 @@ void main() {
       final repository = _PlaybackRepository();
       final store = await openStore();
       final standby = FakePlayer();
-      final (session, player) = await _open(repository, store, standby: standby);
+      final (session, player) = await _open(
+        repository,
+        store,
+        standby: standby,
+      );
       await _settle(player);
 
       expect(session.standbyIndex, 1);

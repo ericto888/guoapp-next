@@ -965,9 +965,11 @@ class PlaybackSession extends ChangeNotifier {
     _standbyPlan = plan;
     final opening = _open(standby, plan);
     _standbyOpening = opening;
-    unawaited(opening.whenComplete(() {
-      if (identical(_standbyOpening, opening)) _standbyOpening = null;
-    }));
+    unawaited(
+      opening.whenComplete(() {
+        if (identical(_standbyOpening, opening)) _standbyOpening = null;
+      }),
+    );
   }
 
   Future<void> _open(Player standby, PlaybackPlan plan) async {

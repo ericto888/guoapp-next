@@ -12,10 +12,7 @@ class PlaybackRecovery {
     _refreshed = false;
   }
 
-  PlaybackRecoveryAction next(
-    PlaybackPlan plan, {
-    bool preferRefresh = false,
-  }) {
+  PlaybackRecoveryAction next(PlaybackPlan plan, {bool preferRefresh = false}) {
     if (_attempts >= maxAttempts) {
       return PlaybackRecoveryAction.stop;
     }
