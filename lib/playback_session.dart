@@ -363,7 +363,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_closed) return;
     if (store.profileEpoch != _epoch || store.locked) {
       _preloader.clear();
-      _dropStandby();
+      unawaited(_dropStandby());
       _playIntent = false;
       _resumeIntent = false;
       endBoost();
@@ -426,7 +426,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_standby != null) {
       if (_standbyOpen &&
           DateTime.now().difference(_standbyAt) > const Duration(minutes: 8)) {
-        _dropStandby();
+        unawaited(_dropStandby());
       }
       if (_standbyIndex >= 0 ||
           duration <= 0 ||
@@ -514,7 +514,7 @@ class PlaybackSession extends ChangeNotifier {
     _advancingSeason = true;
     final ticket = _generation;
     DiaryService.add('[Play] 本季播完，切换到${season.label}');
-    _dropStandby();
+    await _dropStandby();
     _preloader.clear();
     try {
       await saveProgress();
@@ -754,7 +754,7 @@ class PlaybackSession extends ChangeNotifier {
         (_standbyPlan == null || _standbyPlan!.streamEpoch == _streamEpoch)) {
       return _swap(index, playWhenReady);
     }
-    _dropStandby();
+    await _dropStandby();
     final warmed = recovery == null
         ? _preloader.take(
             detail.drama,
@@ -1233,7 +1233,7 @@ class PlaybackSession extends ChangeNotifier {
     _standbyIdleTimer = Timer(const Duration(minutes: 1), () {
       _standbyIdleTimer = null;
       if (_closed || _playIntent || _standbyIndex < 0) return;
-      _dropStandby();
+      unawaited(_dropStandby());
     });
   }
 
@@ -1888,7 +1888,7 @@ class PlaybackSession extends ChangeNotifier {
       _pausedSince = DateTime.now();
       _cancelResumeWatchdog();
       _cancelStandbyIdle();
-      _dropStandby();
+      unawaited(_dropStandby());
       _preloader.clear();
       unawaited(player.pause());
       unawaited(saveProgress());
