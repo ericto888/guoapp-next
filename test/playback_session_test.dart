@@ -581,7 +581,9 @@ void main() {
     expect(repository.fallbacks, 0);
   });
 
-  test('inactive freezes next-episode preload without pausing current playback', () async {
+  test(
+    'inactive freezes next-episode preload without pausing current playback',
+    () async {
     final repository = _PlaybackRepository();
     final store = await openStore();
     final standby = FakePlayer();
@@ -598,7 +600,8 @@ void main() {
     expect(session.standbyIndex, -1);
     expect(standby.stops, greaterThan(0));
     expect(repository.released, contains('session-2'));
-  });
+    },
+  );
 
   test('upstream HTTP 503 refreshes the current signed URL first', () async {
     final repository = _PlaybackRepository();
