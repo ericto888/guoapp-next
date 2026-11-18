@@ -19,10 +19,18 @@ class _PlaybackRepository extends FakeRepository {
   var _sessions = 0;
 
   bool streamAlive = true;
+  int statusFailures = 0;
+  int statusCalls = 0;
 
   @override
-  Future<PlaybackStreamStatus> playbackStatus() async =>
-      PlaybackStreamStatus(alive: streamAlive);
+  Future<PlaybackStreamStatus> playbackStatus() async {
+    statusCalls++;
+    if (statusFailures > 0) {
+      statusFailures--;
+      throw StateError('temporary probe failure');
+    }
+    return PlaybackStreamStatus(alive: streamAlive);
+  }
 
   PlaybackPlan _plan({int route = 0}) {
     _sessions++;
@@ -66,6 +74,14 @@ class _PlaybackRepository extends FakeRepository {
 
   @override
   Future<void> release(String session) async => released.add(session);
+}
+
+class _AdvancingPlayer extends FakePlayer {
+  @override
+  Future<void> play() async {
+    progress(state.position + const Duration(seconds: 1));
+    await super.play();
+  }
 }
 
 final _show = drama('show', title: '测试剧');
@@ -606,6 +622,93 @@ void main() {
       expect(repository.released, contains('session-2'));
     },
   );
+
+  test('iOS dead stream is probed before old player play and rebuilds directly', () async {
+    final repository = _PlaybackRepository()..streamAlive = false;
+    final store = await openStore();
+    final player = _AdvancingPlayer();
+    final rebuilt = FakePlayer();
+    final session = PlaybackSession(
+      repository: repository,
+      store: store,
+      detail: dramaDetail(_show, count: 3),
+      player: player,
+      respawn: () => rebuilt,
+      index: 0,
+      position: 9.5,
+      isIOS: true,
+    );
+    addTearDown(() {
+      if (_closed.add(session)) session.dispose();
+    });
+    await pumpEventQueue();
+
+    session.onLifecycleEvent(AppLifecycleState.inactive, source: 'test');
+    session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
+    session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(repository.statusCalls, 2);
+    expect(player.playCalls, 0, reason: 'dead listener must be detected before old play');
+    expect(identical(session.player, rebuilt), isTrue);
+    expect(rebuilt.opened.single.start, _seconds(9.5));
+  });
+
+  test('iOS alive stream keeps the in-place restore path', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final player = _AdvancingPlayer();
+    final session = PlaybackSession(
+      repository: repository,
+      store: store,
+      detail: dramaDetail(_show, count: 3),
+      player: player,
+      index: 0,
+      position: 9.5,
+      isIOS: true,
+    );
+    addTearDown(() {
+      if (_closed.add(session)) session.dispose();
+    });
+    await pumpEventQueue();
+
+    session.onLifecycleEvent(AppLifecycleState.inactive, source: 'test');
+    session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
+    session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+
+    expect(repository.statusCalls, 1);
+    expect(player.playCalls, 1);
+    expect(identical(session.player, player), isTrue);
+  });
+
+  test('iOS unknown stream probe still attempts in-place restore', () async {
+    final repository = _PlaybackRepository()..statusFailures = 1;
+    final store = await openStore();
+    final player = _AdvancingPlayer();
+    final session = PlaybackSession(
+      repository: repository,
+      store: store,
+      detail: dramaDetail(_show, count: 3),
+      player: player,
+      index: 0,
+      position: 9.5,
+      isIOS: true,
+    );
+    addTearDown(() {
+      if (_closed.add(session)) session.dispose();
+    });
+    await pumpEventQueue();
+
+    session.onLifecycleEvent(AppLifecycleState.inactive, source: 'test');
+    session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
+    session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+
+    expect(repository.statusCalls, 2);
+    expect(player.playCalls, 1);
+    expect(identical(session.player, player), isTrue);
+  });
 
   test('upstream HTTP 503 refreshes the current signed URL first', () async {
     final repository = _PlaybackRepository();
