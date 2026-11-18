@@ -977,7 +977,9 @@ class PlaybackSession extends ChangeNotifier {
         play: false,
       );
     } catch (_) {
-      if (identical(_standbyPlan, plan)) _dropStandby();
+      if (identical(_standbyPlan, plan)) {
+        unawaited(_dropStandby(waitForOpening: false));
+      }
       return;
     }
     if (_closed || !identical(_standbyPlan, plan)) return;
@@ -986,7 +988,7 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> _dropStandby({Player? target, bool retire = false}) {
+  Future<void> _dropStandby({Player? target, bool retire = false, bool waitForOpening = true}) {
     _cancelStandbyIdle();
     final plan = _standbyPlan;
     final standby = target ?? _standby;
@@ -1001,7 +1003,7 @@ class PlaybackSession extends ChangeNotifier {
     final queued = _standbyCleanup.catchError((Object _) {}).then((_) async {
       var safeToRelease = true;
       if (standby != null) {
-        if (plan != null && opening != null) {
+        if (waitForOpening && plan != null && opening != null) {
           try {
             await opening.timeout(const Duration(milliseconds: 1500));
           } catch (_) {
