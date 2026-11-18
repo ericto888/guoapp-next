@@ -988,6 +988,18 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
+  Future<bool> _retireStandbyBeforeRelease(Player target) async {
+    try {
+      await target.dispose().timeout(const Duration(milliseconds: 1500));
+      return true;
+    } catch (_) {
+      DiaryService.add('[Play] 待播播放器销毁超时，暂缓释放媒体 session');
+      return false;
+    } finally {
+      _onRetired?.call(target);
+    }
+  }
+
   Future<void> _dropStandby({Player? target, bool retire = false, bool waitForOpening = true}) {
     _cancelStandbyIdle();
     final plan = _standbyPlan;
@@ -1021,10 +1033,12 @@ class PlaybackSession extends ChangeNotifier {
           if (!retire && identical(_standby, standby)) {
             _standby = _spawnStandby?.call();
           }
-          await _retire(standby);
+          safeToRelease = await _retireStandbyBeforeRelease(standby);
         }
       }
-      if (plan != null) await _release(plan.session);
+      // If even dispose timed out, leave the session for native idle expiry
+      // rather than freeing it while the player may still be reading it.
+      if (plan != null && safeToRelease) await _release(plan.session);
     });
     _standbyCleaning = true;
     late final Future<void> tracked;
