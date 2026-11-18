@@ -82,13 +82,18 @@ func (stream *nativeStreamServer) nativePrefetch(ctx context.Context, token, ent
 				request.Header.Set("Range", fmt.Sprintf("bytes=0-%d", remaining-1))
 			}
 			response, err := stream.downloader.doMediaRequest(request)
+			info := nativeStreamDiagnostic{session: session.diagnosticID, asset: asset.kind, role: "prefetch"}
 			if err != nil {
+				stream.nativeLogError(info, "upstream_error", asset.address, err, "")
 				return false
 			}
 			body, readErr := io.ReadAll(io.LimitReader(response.Body, remaining+1))
 			response.Body.Close()
 			if readErr != nil || len(body) == 0 || int64(len(body)) > remaining ||
 				(response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent) {
+				if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
+					stream.nativeLog(info, "upstream_status", asset.address, "role=prefetch", response.StatusCode, response.Header.Get("Content-Type"))
+				}
 				return false
 			}
 			if response.Request != nil && response.Request.URL != nil {
