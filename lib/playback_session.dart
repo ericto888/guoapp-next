@@ -456,8 +456,11 @@ class PlaybackSession extends ChangeNotifier {
 
   void _playerError(String error) {
     if (_closed || !_acceptErrors || error.trim().isEmpty) return;
-    final upstream503 = _plan?.local != true && RegExp(r'\b503\b').hasMatch(error);
-    DiaryService.add('[Play] ${upstream503 ? '上游 HTTP 503' : '播放器报错'}：${_diagnostic(error)}');
+    final upstream503 =
+        _plan?.local != true && RegExp(r'\b503\b').hasMatch(error);
+    DiaryService.add(
+      '[Play] ${upstream503 ? '上游 HTTP 503' : '播放器报错'}：${_diagnostic(error)}',
+    );
     _queueRecovery(upstream503 ? 'upstream_503' : 'player_error');
   }
 
@@ -1000,7 +1003,11 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  Future<void> _dropStandby({Player? target, bool retire = false, bool waitForOpening = true}) {
+  Future<void> _dropStandby({
+    Player? target,
+    bool retire = false,
+    bool waitForOpening = true,
+  }) {
     _cancelStandbyIdle();
     final plan = _standbyPlan;
     final standby = target ?? _standby;
