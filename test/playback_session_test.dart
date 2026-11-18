@@ -600,6 +600,21 @@ void main() {
     expect(repository.released, contains('session-2'));
   });
 
+  test('upstream HTTP 503 refreshes the current signed URL first', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final (session, player) = await _open(repository, store);
+    await _settle(player);
+
+    player.fail('HTTP error 503 Service Unavailable');
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    await pumpEventQueue();
+
+    expect(repository.resolved, hasLength(2));
+    expect(repository.fallbacks, 0);
+    expect(session.ready, isTrue);
+  });
+
   test('background drops the standby player', () async {
     final repository = _PlaybackRepository();
     final store = await openStore();
