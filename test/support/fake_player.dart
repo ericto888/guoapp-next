@@ -9,6 +9,7 @@ class FakePlayer implements Player {
   final rates = <double>[];
   final seeks = <Duration>[];
   var stops = 0;
+  var playCalls = 0;
   var disposed = false;
   final _playing = StreamController<bool>.broadcast(sync: true);
   final _completed = StreamController<bool>.broadcast(sync: true);
@@ -97,6 +98,7 @@ class FakePlayer implements Player {
 
   @override
   Future<void> play() async {
+    playCalls++;
     state = state.copyWith(playing: true);
     _playing.add(true);
   }
