@@ -12,9 +12,15 @@ class PlaybackRecovery {
     _refreshed = false;
   }
 
-  PlaybackRecoveryAction next(PlaybackPlan plan) {
+  PlaybackRecoveryAction next(PlaybackPlan plan, {bool preferRefresh = false}) {
     if (_attempts >= maxAttempts) {
       return PlaybackRecoveryAction.stop;
+    }
+    // A CDN 503 should refresh the signed URL once before changing routes.
+    if (preferRefresh && !_refreshed) {
+      _attempts++;
+      _refreshed = true;
+      return PlaybackRecoveryAction.refresh;
     }
     if (plan.hasAlternative) {
       _attempts++;
