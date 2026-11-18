@@ -358,7 +358,7 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 	session.mu.Lock()
 	asset, found := session.assets[parts[1]]
 	session.mu.Unlock()
-	info := nativeStreamDiagnostic{session: session.diagnosticID, asset: asset.kind}
+	info := nativeStreamDiagnostic{session: session.diagnosticID, asset: asset.kind, role: "playback"}
 	if !found {
 		stream.nativeLog(info, "asset_missing", "", "", 0, "")
 		http.NotFound(writer, request)
