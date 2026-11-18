@@ -255,6 +255,9 @@ class PlaybackSession extends ChangeNotifier {
   PlaybackPlan? _standbyPlan;
   int _standbyIndex = -1;
   bool _standbyOpen = false;
+  bool _standbyCleaning = false;
+  Future<void> _standbyCleanup = Future<void>.value();
+  Future<void>? _standbyOpening;
   DateTime _standbyAt = DateTime(2000);
   double _openedAt = 0;
   double _speed = 1;
@@ -405,6 +408,8 @@ class PlaybackSession extends ChangeNotifier {
   void _syncPreload() {
     if (_closed) return;
     if (!_foreground ||
+        _lifecycleDormant ||
+        _standbyCleaning ||
         _plan?.local == true ||
         !ready ||
         _openedIndex != _index ||
@@ -452,8 +457,9 @@ class PlaybackSession extends ChangeNotifier {
 
   void _playerError(String error) {
     if (_closed || !_acceptErrors || error.trim().isEmpty) return;
-    DiaryService.add('[Play] 播放器报错：${_diagnostic(error)}');
-    _queueRecovery('player_error');
+    final upstream503 = _plan?.local != true && RegExp(r'\b503\b').hasMatch(error);
+    DiaryService.add('[Play] ${upstream503 ? '上游 HTTP 503' : '播放器报错'}：${_diagnostic(error)}');
+    _queueRecovery(upstream503 ? 'upstream_503' : 'player_error');
   }
 
   void _completed(bool completed) {
@@ -637,7 +643,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     final action = current.local
         ? PlaybackRecoveryAction.stop
-        : _recovery.next(current);
+        : _recovery.next(current, preferRefresh: reason == 'upstream_503');
     DiaryService.add(
       '[Play] 自动恢复 原因=$reason 处理=${action.name} 线路=${current.routeIndex + 1}/${current.routeCount}',
     );
@@ -934,6 +940,9 @@ class PlaybackSession extends ChangeNotifier {
     final standby = _standby;
     final next = _index + 1;
     if (_closed ||
+        !_foreground ||
+        _lifecycleDormant ||
+        _standbyCleaning ||
         standby == null ||
         _standbyIndex >= 0 ||
         !_preloader.ready ||
@@ -952,7 +961,11 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     _standbyPlan = plan;
-    unawaited(_open(standby, plan));
+    final opening = _open(standby, plan);
+    _standbyOpening = opening;
+    unawaited(opening.whenComplete(() {
+      if (identical(_standbyOpening, opening)) _standbyOpening = null;
+    }));
   }
 
   Future<void> _open(Player standby, PlaybackPlan plan) async {
@@ -974,15 +987,51 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
-  void _dropStandby() {
+  Future<void> _dropStandby({Player? target, bool retire = false}) {
     _cancelStandbyIdle();
     final plan = _standbyPlan;
-    final opened = _standbyOpen || plan != null;
+    final standby = target ?? _standby;
+    final opening = _standbyOpening;
     _standbyPlan = null;
     _standbyIndex = -1;
     _standbyOpen = false;
-    if (opened) unawaited(_standby?.stop().catchError((Object _) {}));
-    if (plan != null) unawaited(_release(plan.session));
+    _standbyOpening = null;
+
+    // Serialize open -> stop/dispose -> release. The Go session must remain
+    // alive until media_kit can no longer read its local stream URL.
+    final queued = _standbyCleanup.catchError((Object _) {}).then((_) async {
+      var safeToRelease = true;
+      if (standby != null && plan != null) {
+        if (opening != null) {
+          try {
+            await opening.timeout(const Duration(milliseconds: 1500));
+          } catch (_) {
+            safeToRelease = false;
+          }
+        }
+        if (safeToRelease) {
+          try {
+            await standby.stop().timeout(const Duration(milliseconds: 1500));
+          } catch (_) {
+            safeToRelease = false;
+          }
+        }
+        if (!safeToRelease || retire) {
+          if (!retire && identical(_standby, standby)) {
+            _standby = _spawnStandby?.call();
+          }
+          await _retire(standby);
+        }
+      }
+      if (plan != null) await _release(plan.session);
+    });
+    _standbyCleaning = true;
+    late final Future<void> tracked;
+    tracked = queued.whenComplete(() {
+      if (identical(_standbyCleanup, tracked)) _standbyCleaning = false;
+    });
+    _standbyCleanup = tracked;
+    return tracked;
   }
 
   Future<void> _limitCache(Player target, bool limited) async {
@@ -1511,23 +1560,18 @@ class PlaybackSession extends ChangeNotifier {
   void _invalidateStandbyForBackground() {
     final standby = _standby;
     if (standby == null && _standbyPlan == null) return;
-    _dropStandby();
     _standby = null;
-    if (standby != null) {
-      unawaited(
-        standby
-            .stop()
-            .timeout(const Duration(milliseconds: 1500))
-            .catchError((Object _) {})
-            .whenComplete(() => _retire(standby)),
-      );
-    }
+    unawaited(_dropStandby(target: standby, retire: true));
     _standby = _spawnStandby?.call();
   }
 
   void _onInactive(String source) {
     if (_foreground) _snapshotForBackground();
     _lifecycleDormant = true;
+    // Keep the current player alive for iOS lock-screen audio restoration,
+    // but cancel next-episode preparation and retire any opened standby plan.
+    _preloader.clear();
+    unawaited(_dropStandby());
     DiaryService.add(
       '[Play] 生命周期 inactive 来源=$source 集=${_index + 1} '
       '位置=${_resumePosition.toStringAsFixed(1)} 续播=$_resumeIntent',
@@ -1912,15 +1956,16 @@ class PlaybackSession extends ChangeNotifier {
     _preloader.dispose();
     final session = _plan?.session ?? '';
     unawaited(_release(session));
-    final standbyPlan = _standbyPlan;
-    if (standbyPlan != null) unawaited(_release(standbyPlan.session));
     final standby = _standby;
+    _standby = null;
+    final standbyCleanup = _dropStandby(target: standby, retire: true);
     unawaited(_loader.close().catchError((Object _) {}));
     unawaited(
       _operations.catchError((Object _) {}).then((_) async {
         await _rates.catchError((Object _) {});
         await player.dispose();
-        await standby?.dispose();
+        await standbyCleanup;
+        await _release(session);
       }),
     );
     super.dispose();
