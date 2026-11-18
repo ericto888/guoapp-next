@@ -581,6 +581,25 @@ void main() {
     expect(repository.fallbacks, 0);
   });
 
+  test('inactive freezes next-episode preload without pausing current playback', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final standby = FakePlayer();
+    final (session, player) = await _open(repository, store, standby: standby);
+    await _settle(player);
+
+    expect(session.standbyIndex, 1);
+    expect(player.state.playing, isTrue);
+
+    session.onLifecycleEvent(AppLifecycleState.inactive, source: 'test');
+    await pumpEventQueue();
+
+    expect(player.state.playing, isTrue);
+    expect(session.standbyIndex, -1);
+    expect(standby.stops, greaterThan(0));
+    expect(repository.released, contains('session-2'));
+  });
+
   test('background drops the standby player', () async {
     final repository = _PlaybackRepository();
     final store = await openStore();
