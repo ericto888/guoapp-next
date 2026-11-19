@@ -292,7 +292,9 @@ class PlaybackSession extends ChangeNotifier {
 
   bool get stalled => _stalled;
 
-  bool get paused => !_playIntent;
+  // UI pause state follows the user's intent, not lifecycle suspension.
+  // _playIntent is temporarily false while the app is backgrounded.
+  bool get paused => !_resumeIntent;
   bool get boosting => _boosting;
   bool get boostLocked => _boostLocked;
   bool get locked => _locked;

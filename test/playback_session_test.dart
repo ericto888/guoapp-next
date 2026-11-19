@@ -542,6 +542,33 @@ void main() {
     expect(session.stalled, isFalse);
   });
 
+  test('lifecycle suspension does not appear as a user pause', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final (session, player) = await _open(repository, store);
+    await _settle(player);
+
+    expect(session.paused, isFalse);
+
+    // Backgrounding pauses the engine, but must not change the user's intent.
+    session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
+    expect(player.state.playing, isFalse);
+    expect(session.paused, isFalse);
+
+    session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
+    await pumpEventQueue();
+    expect(session.paused, isFalse);
+
+    // An explicit user pause remains visible and must survive backgrounding.
+    session.togglePlayback();
+    expect(session.paused, isTrue);
+    session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
+    session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
+    expect(session.paused, isTrue);
+    await pumpEventQueue();
+    expect(player.state.playing, isFalse);
+  });
+
   test('rebuilds the player when lifecycle resume cannot advance', () async {
     final repository = _PlaybackRepository();
     final store = await openStore();
