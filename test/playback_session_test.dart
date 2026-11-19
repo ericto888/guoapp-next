@@ -508,7 +508,7 @@ void main() {
     expect(session.standbyIndex, -1);
   });
 
-  test('starting a preopened session restores the user play intent', () async {
+  test('starting a preopened session clears the paused UI state', () async {
     final repository = _PlaybackRepository();
     final store = await openStore();
     final (session, player) = await _open(
@@ -545,9 +545,7 @@ void main() {
     expect(store.watched(_show.id)!.episode, 1);
   });
 
-  test(
-    'swapping to a standby player preserves an explicit paused intent',
-    () async {
+  test('standby swap preserves the requested paused state', () async {
       final repository = _PlaybackRepository();
       final store = await openStore();
       final standby = FakePlayer();
