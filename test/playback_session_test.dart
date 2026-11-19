@@ -508,28 +508,25 @@ void main() {
     expect(session.standbyIndex, -1);
   });
 
-  test(
-    'starting a preopened session restores the user play intent',
-    () async {
-      final repository = _PlaybackRepository();
-      final store = await openStore();
-      final (session, player) = await _open(
-        repository,
-        store,
-        autoplay: false,
-      );
+  test('starting a preopened session restores the user play intent', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final (session, player) = await _open(
+      repository,
+      store,
+      autoplay: false,
+    );
 
-      expect(session.ready, isTrue);
-      expect(session.paused, isTrue);
-      expect(player.state.playing, isFalse);
+    expect(session.ready, isTrue);
+    expect(session.paused, isTrue);
+    expect(player.state.playing, isFalse);
 
-      session.start(0);
-      await pumpEventQueue();
+    session.start(0);
+    await pumpEventQueue();
 
-      expect(player.state.playing, isTrue);
-      expect(session.paused, isFalse);
-    },
-  );
+    expect(player.state.playing, isTrue);
+    expect(session.paused, isFalse);
+  });
 
   test('switching to the waiting episode swaps players at once', () async {
     final repository = _PlaybackRepository();
