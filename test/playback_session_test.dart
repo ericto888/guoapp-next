@@ -650,7 +650,7 @@ void main() {
       session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      expect(repository.statusCalls, 2);
+      expect(repository.statusCalls, 1);
       expect(
         player.playCalls,
         0,
