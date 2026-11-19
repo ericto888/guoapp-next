@@ -45,6 +45,8 @@ func (engine *nativeEngine) nativeCancelPlayback(sequence int64) {
 // nativePlaybackStatus 返回监听状态、代次和探活细节。unknown 不等于 dead，
 // 交由 Dart 端在恢复窗口内重试，避免把 iOS 网络栈恢复延迟误判成 listener 退出。
 func (engine *nativeEngine) nativePlaybackStatus() (bool, int64, string, string) {
+	engine.streamMu.Lock()
+	defer engine.streamMu.Unlock()
 	engine.mu.Lock()
 	stream := engine.stream
 	epoch := engine.streamEpoch
