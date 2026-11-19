@@ -511,11 +511,7 @@ void main() {
   test('starting a preopened session clears the paused UI state', () async {
     final repository = _PlaybackRepository();
     final store = await openStore();
-    final (session, player) = await _open(
-      repository,
-      store,
-      autoplay: false,
-    );
+    final (session, player) = await _open(repository, store, autoplay: false);
 
     expect(session.ready, isTrue);
     expect(session.paused, isTrue);
@@ -546,23 +542,18 @@ void main() {
   });
 
   test('standby swap preserves the requested paused state', () async {
-      final repository = _PlaybackRepository();
-      final store = await openStore();
-      final standby = FakePlayer();
-      final (session, player) = await _open(
-        repository,
-        store,
-        standby: standby,
-      );
-      await _settle(player);
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final standby = FakePlayer();
+    final (session, player) = await _open(repository, store, standby: standby);
+    await _settle(player);
 
-      await session.play(1, playWhenReady: false);
+    await session.play(1, playWhenReady: false);
 
-      expect(identical(session.player, standby), isTrue);
-      expect(session.paused, isTrue);
-      expect(standby.state.playing, isFalse);
-    },
-  );
+    expect(identical(session.player, standby), isTrue);
+    expect(session.paused, isTrue);
+    expect(standby.state.playing, isFalse);
+  });
 
   test('only buffering that lasts counts as stalled', () async {
     final repository = _PlaybackRepository();
