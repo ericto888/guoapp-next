@@ -24,7 +24,6 @@ class _PlaybackRepository extends FakeRepository {
   int statusCalls = 0;
   int? blockedEpisode;
   Completer<PlaybackPlan>? blockedResolve;
-  PlaybackPlan? delayedPlan;
 
   @override
   Future<PlaybackStreamStatus> playbackStatus() async {
@@ -58,7 +57,6 @@ class _PlaybackRepository extends FakeRepository {
     if (resolveFailure.isNotEmpty) throw AppFailure(resolveFailure);
     if (episode.number == blockedEpisode && blockedResolve != null) {
       final plan = await blockedResolve!.future;
-      delayedPlan = plan;
       return plan;
     }
     return _plan();
@@ -444,8 +442,8 @@ void main() {
     final repository = _PlaybackRepository();
     final store = await openStore();
     final standby = _BlockingStopPlayer();
-    final (session, _) = await _open(repository, store, standby: standby);
-    await _settle(session.player as FakePlayer);
+    final (session, player) = await _open(repository, store, standby: standby);
+    await _settle(player);
 
     expect(session.standbyIndex, 1);
     final switching = session.play(2);
