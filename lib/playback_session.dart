@@ -619,13 +619,9 @@ class PlaybackSession extends ChangeNotifier {
           DiaryService.add('[Play] 本机取流确认失效：${status.detail}');
           return _StreamProbe.dead;
         }
-        DiaryService.add(
-          '[Play] 本机取流状态待确认 第${attempt + 1}次：${status.detail}',
-        );
+        DiaryService.add('[Play] 本机取流状态待确认 第${attempt + 1}次：${status.detail}');
       } catch (error) {
-        DiaryService.add(
-          '[Play] 取流探活异常 第${attempt + 1}次：${_diagnostic(error)}',
-        );
+        DiaryService.add('[Play] 取流探活异常 第${attempt + 1}次：${_diagnostic(error)}');
       }
     }
     // 不确定状态不等于 dead；保留原播放器路径，后续播放错误再触发恢复。
