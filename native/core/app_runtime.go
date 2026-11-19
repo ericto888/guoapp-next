@@ -140,6 +140,7 @@ type nativeEngine struct {
 	cacheDirectory      string
 	defaultDownloads    string
 	mu                  sync.Mutex
+	streamMu            sync.Mutex
 	catalogs            map[string][]LibraryDrama
 	catalogStates       map[string]nativeCatalogState
 	categoryOptions     map[string][]Category
