@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"syscall"
 )
 
 type nativeStreamDiagnosticKey struct{}
@@ -19,6 +20,7 @@ type nativeStreamDiagnosticKey struct{}
 type nativeStreamDiagnostic struct {
 	session string
 	asset   string
+	role    string
 }
 
 func nativeStreamID(value string) string {
@@ -58,13 +60,25 @@ func nativeStreamError(err error) string {
 	if errors.As(err, &dns) {
 		return "dns"
 	}
-	var op *net.OpError
-	if errors.As(err, &op) && op.Op == "dial" {
-		return "connect"
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return "connection_refused"
+	}
+	if errors.Is(err, syscall.ENETUNREACH) {
+		return "network_unreachable"
+	}
+	if errors.Is(err, syscall.EHOSTUNREACH) {
+		return "host_unreachable"
+	}
+	if errors.Is(err, syscall.ECONNRESET) {
+		return "connection_reset"
 	}
 	var timeout net.Error
 	if errors.As(err, &timeout) && timeout.Timeout() {
 		return "timeout"
+	}
+	var op *net.OpError
+	if errors.As(err, &op) && op.Op == "dial" {
+		return "connect"
 	}
 	if errors.Is(err, io.ErrUnexpectedEOF) {
 		return "unexpected_eof"
@@ -75,9 +89,13 @@ func nativeStreamError(err error) string {
 func (stream *nativeStreamServer) nativeLog(info nativeStreamDiagnostic, event, address, detail string, status int, contentType string) {
 	host, target := nativeStreamTarget(address)
 	mediaType, _, _ := mime.ParseMediaType(contentType)
+	role := info.role
+	if role == "" && info.session != "" {
+		role = "playback"
+	}
 	stream.downloader.recordDiagnostic(diagnosticEvent{
 		Event: "stream." + event, Level: "warning", Host: host, HTTPStatus: status, ResponseType: mediaType,
-		Message: strings.TrimSpace(fmt.Sprintf("session=%s asset=%s path=%s %s", info.session, info.asset, target, detail)),
+		Message: strings.TrimSpace(fmt.Sprintf("session=%s role=%s asset=%s path=%s %s", info.session, role, info.asset, target, detail)),
 	})
 }
 

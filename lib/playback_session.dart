@@ -51,7 +51,9 @@ class PlaybackSession extends ChangeNotifier {
     required int index,
     double position = 0,
     bool autoplay = true,
+    @visibleForTesting bool? isIOS,
   }) : _player = player,
+       _isIOS = isIOS ?? Platform.isIOS,
        _engaged = autoplay,
        _index = index,
        _epoch = store.profileEpoch {
@@ -186,6 +188,7 @@ class PlaybackSession extends ChangeNotifier {
   final LocalStore store;
   DramaDetail detail;
   Player _player;
+  final bool _isIOS;
   Player? _standby;
 
   /// 切出/锁屏后底层实例可能已被系统回收，恢复播放前需要重建播放器。
@@ -255,6 +258,9 @@ class PlaybackSession extends ChangeNotifier {
   PlaybackPlan? _standbyPlan;
   int _standbyIndex = -1;
   bool _standbyOpen = false;
+  bool _standbyCleaning = false;
+  Future<void> _standbyCleanup = Future<void>.value();
+  Future<void>? _standbyOpening;
   DateTime _standbyAt = DateTime(2000);
   double _openedAt = 0;
   double _speed = 1;
@@ -286,7 +292,9 @@ class PlaybackSession extends ChangeNotifier {
 
   bool get stalled => _stalled;
 
-  bool get paused => !_playIntent;
+  // UI pause state follows the user's intent, not lifecycle suspension.
+  // _playIntent is temporarily false while the app is backgrounded.
+  bool get paused => !_resumeIntent;
   bool get boosting => _boosting;
   bool get boostLocked => _boostLocked;
   bool get locked => _locked;
@@ -360,7 +368,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_closed) return;
     if (store.profileEpoch != _epoch || store.locked) {
       _preloader.clear();
-      _dropStandby();
+      unawaited(_dropStandby());
       _playIntent = false;
       _resumeIntent = false;
       endBoost();
@@ -403,8 +411,9 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   void _syncPreload() {
-    if (_closed) return;
+    if (_closed || _standbyCleaning) return;
     if (!_foreground ||
+        _lifecycleDormant ||
         _plan?.local == true ||
         !ready ||
         _openedIndex != _index ||
@@ -422,7 +431,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_standby != null) {
       if (_standbyOpen &&
           DateTime.now().difference(_standbyAt) > const Duration(minutes: 8)) {
-        _dropStandby();
+        unawaited(_dropStandby());
       }
       if (_standbyIndex >= 0 ||
           duration <= 0 ||
@@ -452,8 +461,12 @@ class PlaybackSession extends ChangeNotifier {
 
   void _playerError(String error) {
     if (_closed || !_acceptErrors || error.trim().isEmpty) return;
-    DiaryService.add('[Play] 播放器报错：${_diagnostic(error)}');
-    _queueRecovery('player_error');
+    final upstream503 =
+        _plan?.local != true && RegExp(r'\b503\b').hasMatch(error);
+    DiaryService.add(
+      '[Play] ${upstream503 ? '上游 HTTP 503' : '播放器报错'}：${_diagnostic(error)}',
+    );
+    _queueRecovery(upstream503 ? 'upstream_503' : 'player_error');
   }
 
   void _completed(bool completed) {
@@ -509,7 +522,7 @@ class PlaybackSession extends ChangeNotifier {
     _advancingSeason = true;
     final ticket = _generation;
     DiaryService.add('[Play] 本季播完，切换到${season.label}');
-    _dropStandby();
+    await _dropStandby();
     _preloader.clear();
     try {
       await saveProgress();
@@ -582,28 +595,41 @@ class PlaybackSession extends ChangeNotifier {
     });
   }
 
-  /// 取流探活：本机监听被系统回收后，旧播放地址只会得到 connection refused。
+  /// 取流探活：dead 必须是明确的 listener 退出/connection refused；
+  /// timeout 等恢复窗口内的瞬时错误只记为 unknown，不销毁仍可能可用的旧服务。
   Future<_StreamProbe> _probeStream() async {
-    var sawDead = false;
-    var sawError = false;
-    for (var attempt = 0; attempt < 2; attempt++) {
+    const retryDelays = <Duration>[
+      Duration.zero,
+      Duration(milliseconds: 300),
+      Duration(milliseconds: 500),
+      Duration(milliseconds: 700),
+    ];
+    for (var attempt = 0; attempt < retryDelays.length; attempt++) {
       if (attempt > 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 150));
+        await Future<void>.delayed(retryDelays[attempt]);
       }
       try {
         final status = await repository.playbackStatus().timeout(
-          const Duration(seconds: 2),
+          const Duration(milliseconds: 1200),
         );
         if (!_closed) _streamEpoch = status.epoch;
-        if (status.alive) return _StreamProbe.alive;
-        sawDead = true;
+        if (status.alive || status.state == 'alive') {
+          return _StreamProbe.alive;
+        }
+        if (status.state == 'dead') {
+          // 明确 connection refused / Serve 已退出，不需要再等待。
+          DiaryService.add('[Play] 本机取流确认失效：${status.detail}');
+          return _StreamProbe.dead;
+        }
+        DiaryService.add('[Play] 本机取流状态待确认 第${attempt + 1}次：${status.detail}');
       } catch (error) {
-        DiaryService.add('[Play] 取流探活异常：${_diagnostic(error)}');
-        sawError = true;
+        DiaryService.add(
+          '[Play] 取流探活异常 第${attempt + 1}次：${_diagnostic(error)}',
+        );
       }
     }
-    // 一次 false 一次异常仍属「未确认」，避免误触发重建。
-    return sawDead && !sawError ? _StreamProbe.dead : _StreamProbe.unknown;
+    // 不确定状态不等于 dead；保留原播放器路径，后续播放错误再触发恢复。
+    return _StreamProbe.unknown;
   }
 
   Future<void> _recover(String reason) async {
@@ -637,7 +663,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     final action = current.local
         ? PlaybackRecoveryAction.stop
-        : _recovery.next(current);
+        : _recovery.next(current, preferRefresh: reason == 'upstream_503');
     DiaryService.add(
       '[Play] 自动恢复 原因=$reason 处理=${action.name} 线路=${current.routeIndex + 1}/${current.routeCount}',
     );
@@ -749,8 +775,8 @@ class PlaybackSession extends ChangeNotifier {
         (_standbyPlan == null || _standbyPlan!.streamEpoch == _streamEpoch)) {
       return _swap(index, playWhenReady);
     }
-    _dropStandby();
-    final warmed = recovery == null
+    await _dropStandby();
+    final candidate = recovery == null
         ? _preloader.take(
             detail.drama,
             detail.episodes[index],
@@ -758,6 +784,15 @@ class PlaybackSession extends ChangeNotifier {
             online: _online,
           )
         : null;
+    final warmed = candidate != null && candidate.streamEpoch == _streamEpoch
+        ? candidate
+        : null;
+    if (candidate != null && warmed == null) {
+      DiaryService.add(
+        '[Play] 丢弃过期预加载会话 代次=${candidate.streamEpoch}/$_streamEpoch',
+      );
+      unawaited(_release(candidate.session));
+    }
     _preloader.clear();
     final ticket = ++_generation;
     _seekSequence++;
@@ -896,6 +931,7 @@ class PlaybackSession extends ChangeNotifier {
     _health.reset();
     _recovery.reset();
     _playIntent = playWhenReady;
+    _resumeIntent = playWhenReady;
     _resumePosition = 0;
     _openedAt = 0;
     _index = index;
@@ -934,6 +970,9 @@ class PlaybackSession extends ChangeNotifier {
     final standby = _standby;
     final next = _index + 1;
     if (_closed ||
+        !_foreground ||
+        _lifecycleDormant ||
+        _standbyCleaning ||
         standby == null ||
         _standbyIndex >= 0 ||
         !_preloader.ready ||
@@ -951,8 +990,23 @@ class PlaybackSession extends ChangeNotifier {
       _standbyIndex = -1;
       return;
     }
+    if (plan.streamEpoch != _streamEpoch) {
+      _standbyIndex = -1;
+      DiaryService.add(
+        '[Play] 待机预加载代次已过期，放弃预开 '
+        '代次=${plan.streamEpoch}/$_streamEpoch',
+      );
+      unawaited(_release(plan.session));
+      return;
+    }
     _standbyPlan = plan;
-    unawaited(_open(standby, plan));
+    final opening = _open(standby, plan);
+    _standbyOpening = opening;
+    unawaited(
+      opening.whenComplete(() {
+        if (identical(_standbyOpening, opening)) _standbyOpening = null;
+      }),
+    );
   }
 
   Future<void> _open(Player standby, PlaybackPlan plan) async {
@@ -965,7 +1019,9 @@ class PlaybackSession extends ChangeNotifier {
         play: false,
       );
     } catch (_) {
-      if (identical(_standbyPlan, plan)) _dropStandby();
+      if (identical(_standbyPlan, plan)) {
+        unawaited(_dropStandby(waitForOpening: false));
+      }
       return;
     }
     if (_closed || !identical(_standbyPlan, plan)) return;
@@ -974,15 +1030,69 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
-  void _dropStandby() {
+  Future<bool> _retireStandbyBeforeRelease(Player target) async {
+    try {
+      await target.dispose().timeout(const Duration(milliseconds: 1500));
+      return true;
+    } catch (_) {
+      DiaryService.add('[Play] 待播播放器销毁超时，暂缓释放媒体 session');
+      return false;
+    } finally {
+      _onRetired?.call(target);
+    }
+  }
+
+  Future<void> _dropStandby({
+    Player? target,
+    bool retire = false,
+    bool waitForOpening = true,
+  }) {
     _cancelStandbyIdle();
     final plan = _standbyPlan;
-    final opened = _standbyOpen || plan != null;
+    final standby = target ?? _standby;
+    final opening = _standbyOpening;
     _standbyPlan = null;
     _standbyIndex = -1;
     _standbyOpen = false;
-    if (opened) unawaited(_standby?.stop().catchError((Object _) {}));
-    if (plan != null) unawaited(_release(plan.session));
+    _standbyOpening = null;
+
+    // Serialize open -> stop/dispose -> release. The Go session must remain
+    // alive until media_kit can no longer read its local stream URL.
+    final queued = _standbyCleanup.catchError((Object _) {}).then((_) async {
+      var safeToRelease = true;
+      if (standby != null) {
+        if (waitForOpening && plan != null && opening != null) {
+          try {
+            await opening.timeout(const Duration(milliseconds: 1500));
+          } catch (_) {
+            safeToRelease = false;
+          }
+        }
+        if (safeToRelease && plan != null) {
+          try {
+            await standby.stop().timeout(const Duration(milliseconds: 1500));
+          } catch (_) {
+            safeToRelease = false;
+          }
+        }
+        if (!safeToRelease || retire) {
+          if (!retire && identical(_standby, standby)) {
+            _standby = _spawnStandby?.call();
+          }
+          safeToRelease = await _retireStandbyBeforeRelease(standby);
+        }
+      }
+      // If even dispose timed out, leave the session for native idle expiry
+      // rather than freeing it while the player may still be reading it.
+      if (plan != null && safeToRelease) await _release(plan.session);
+    });
+    _standbyCleaning = true;
+    late final Future<void> tracked;
+    tracked = queued.whenComplete(() {
+      if (identical(_standbyCleanup, tracked)) _standbyCleaning = false;
+    });
+    _standbyCleanup = tracked;
+    return tracked;
   }
 
   Future<void> _limitCache(Player target, bool limited) async {
@@ -1040,7 +1150,11 @@ class PlaybackSession extends ChangeNotifier {
       unawaited(play(index, position: position));
       return;
     }
+    // Starting a preopened session is an explicit user play action.
+    // Keep the UI intent in sync with the engine intent.
     _playIntent = true;
+    _resumeIntent = true;
+    _notify();
     if (!wasEngaged) unawaited(_limitCache(player, false));
     if (ready) unawaited(player.play());
   }
@@ -1183,7 +1297,7 @@ class PlaybackSession extends ChangeNotifier {
     _standbyIdleTimer = Timer(const Duration(minutes: 1), () {
       _standbyIdleTimer = null;
       if (_closed || _playIntent || _standbyIndex < 0) return;
-      _dropStandby();
+      unawaited(_dropStandby());
     });
   }
 
@@ -1511,23 +1625,18 @@ class PlaybackSession extends ChangeNotifier {
   void _invalidateStandbyForBackground() {
     final standby = _standby;
     if (standby == null && _standbyPlan == null) return;
-    _dropStandby();
     _standby = null;
-    if (standby != null) {
-      unawaited(
-        standby
-            .stop()
-            .timeout(const Duration(milliseconds: 1500))
-            .catchError((Object _) {})
-            .whenComplete(() => _retire(standby)),
-      );
-    }
+    unawaited(_dropStandby(target: standby, retire: true));
     _standby = _spawnStandby?.call();
   }
 
   void _onInactive(String source) {
     if (_foreground) _snapshotForBackground();
     _lifecycleDormant = true;
+    // Keep the current player alive for iOS lock-screen audio restoration,
+    // but cancel next-episode preparation and retire any opened standby plan.
+    _preloader.clear();
+    unawaited(_dropStandby());
     DiaryService.add(
       '[Play] 生命周期 inactive 来源=$source 集=${_index + 1} '
       '位置=${_resumePosition.toStringAsFixed(1)} 续播=$_resumeIntent',
@@ -1623,6 +1732,28 @@ class PlaybackSession extends ChangeNotifier {
     }
     if (!_lifecycleRestoreValid(token, generation)) return;
 
+    // iOS 挂起期间可能回收本机 HTTP listener。必须在旧播放器 play() 前
+    // 探活，否则旧缓冲区可能让画面短暂推进，随后才发现 listener 已失效并闪屏重建。
+    final plan = _plan;
+    if (_isIOS && plan != null && !plan.local) {
+      final probe = await _probeStream();
+      if (!_lifecycleRestoreValid(token, generation) || index != _index) return;
+      final epochChanged =
+          probe == _StreamProbe.alive && plan.streamEpoch != _streamEpoch;
+      if (probe == _StreamProbe.dead || epochChanged) {
+        final live = currentPosition;
+        final resumeAt = live > _resumePosition ? live : _resumePosition;
+        DiaryService.add(
+          '[Play] 回前台后本机取流失效，直接重建播放器 探活=${probe.name} '
+          '代次=${plan.streamEpoch}/$_streamEpoch',
+        );
+        _resumePosition = resumeAt;
+        await _rebuildAndResume(resumeAt, true, token: token);
+        return;
+      }
+      // unknown 不等于 dead：网络探活不确定时，保留旧播放器原地恢复路径。
+    }
+
     _playIntent = true;
     _sync();
     _notify();
@@ -1644,25 +1775,6 @@ class PlaybackSession extends ChangeNotifier {
         final state = player.state;
         if (state.playing &&
             state.position > before + const Duration(milliseconds: 250)) {
-          final plan = _plan;
-          if (Platform.isIOS && plan != null && !plan.local) {
-            // 缓冲区里的旧数据会让位置短暂推进，但挂起期间监听可能已被回收，
-            // 缓冲耗尽后只会得到 connection refused，所以这里必须探活一次。
-            final probe = await _probeStream();
-            if (!_lifecycleRestoreValid(token, generation) || index != _index) {
-              return;
-            }
-            if (probe == _StreamProbe.dead ||
-                plan.streamEpoch != _streamEpoch) {
-              DiaryService.add(
-                '[Play] 回前台后本机取流失效，重建播放器 探活=${probe.name} '
-                '代次=${plan.streamEpoch}/$_streamEpoch',
-              );
-              _resumePosition = state.position.inMilliseconds / 1000;
-              await _rebuildAndResume(_resumePosition, true, token: token);
-              return;
-            }
-          }
           DiaryService.add('[Play] 前台原地恢复成功 位置=${state.position}');
           _resumePosition = state.position.inMilliseconds / 1000;
           _health.reset();
@@ -1843,7 +1955,7 @@ class PlaybackSession extends ChangeNotifier {
       _pausedSince = DateTime.now();
       _cancelResumeWatchdog();
       _cancelStandbyIdle();
-      _dropStandby();
+      unawaited(_dropStandby());
       _preloader.clear();
       unawaited(player.pause());
       unawaited(saveProgress());
@@ -1911,16 +2023,16 @@ class PlaybackSession extends ChangeNotifier {
     danmaku.dispose();
     _preloader.dispose();
     final session = _plan?.session ?? '';
-    unawaited(_release(session));
-    final standbyPlan = _standbyPlan;
-    if (standbyPlan != null) unawaited(_release(standbyPlan.session));
     final standby = _standby;
+    _standby = null;
+    final standbyCleanup = _dropStandby(target: standby, retire: true);
     unawaited(_loader.close().catchError((Object _) {}));
     unawaited(
       _operations.catchError((Object _) {}).then((_) async {
         await _rates.catchError((Object _) {});
         await player.dispose();
-        await standby?.dispose();
+        await standbyCleanup;
+        await _release(session);
       }),
     );
     super.dispose();

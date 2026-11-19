@@ -161,12 +161,20 @@ func (stream *nativeStreamServer) nativeClose() int {
 	sessions := stream.sessions
 	stream.sessions = map[string]*nativeStreamSession{}
 	server := stream.server
+	lan := stream.lan
+	stream.lan = nil
+	stream.lanPort = 0
 	stream.mu.Unlock()
 	for _, session := range sessions {
 		session.cancel()
 	}
 	if server != nil {
 		_ = server.Close()
+	}
+	// 投屏服务复用同一个 handler，但必须随主 listener 一起关闭，
+	// 否则每次后台恢复重建都会遗留一个无主的局域网监听端口。
+	if lan != nil {
+		_ = lan.Close()
 	}
 	return len(sessions)
 }
@@ -358,7 +366,7 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 	session.mu.Lock()
 	asset, found := session.assets[parts[1]]
 	session.mu.Unlock()
-	info := nativeStreamDiagnostic{session: session.diagnosticID, asset: asset.kind}
+	info := nativeStreamDiagnostic{session: session.diagnosticID, asset: asset.kind, role: "playback"}
 	if !found {
 		stream.nativeLog(info, "asset_missing", "", "", 0, "")
 		http.NotFound(writer, request)

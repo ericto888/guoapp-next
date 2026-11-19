@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,14 +29,27 @@ func (engine *nativeEngine) nativePreload(ctx context.Context, input nativeInput
 	choice, exists := engine.playbacks[plan.Session]
 	stream := engine.stream
 	engine.mu.Unlock()
-	if exists && stream != nil && choice.streamSession != "" {
-		warming, cancel := context.WithTimeout(ctx, 6*time.Second)
-		plan.PrefetchedBytes = stream.nativePrefetch(warming, choice.streamSession, plan.URL, input.Quality)
-		cancel()
+	if !exists || stream == nil || choice.streamSession == "" {
+		engine.nativeReleasePlayback(plan.Session)
+		return nativePlan{}, errors.New("预加载会话已失效")
 	}
+	warming, cancel := context.WithTimeout(ctx, 6*time.Second)
+	plan.PrefetchedBytes = stream.nativePrefetch(warming, choice.streamSession, plan.URL, input.Quality)
+	cancel()
 	if err := ctx.Err(); err != nil {
 		engine.nativeReleasePlayback(plan.Session)
 		return nativePlan{}, err
+	}
+	// 后台恢复可能在预取期间重建 listener。旧 stream 的 session 会被清空，
+	// 但 preload 的请求上下文未必同时取消；必须在返回前确认 plan 仍属于当前
+	// listener，不能把旧 127.0.0.1 地址交给 Dart 缓存为“下一集已准备”。
+	engine.mu.Lock()
+	currentChoice, stillExists := engine.playbacks[plan.Session]
+	currentStream := engine.stream
+	engine.mu.Unlock()
+	if !stillExists || currentStream != stream || currentChoice.streamSession != choice.streamSession {
+		engine.nativeReleasePlayback(plan.Session)
+		return nativePlan{}, errors.New("预加载期间本机取流服务已重建")
 	}
 	return plan, nil
 }
@@ -82,13 +96,18 @@ func (stream *nativeStreamServer) nativePrefetch(ctx context.Context, token, ent
 				request.Header.Set("Range", fmt.Sprintf("bytes=0-%d", remaining-1))
 			}
 			response, err := stream.downloader.doMediaRequest(request)
+			info := nativeStreamDiagnostic{session: session.diagnosticID, asset: asset.kind, role: "prefetch"}
 			if err != nil {
+				stream.nativeLogError(info, "upstream_error", asset.address, err, "")
 				return false
 			}
 			body, readErr := io.ReadAll(io.LimitReader(response.Body, remaining+1))
 			response.Body.Close()
 			if readErr != nil || len(body) == 0 || int64(len(body)) > remaining ||
 				(response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent) {
+				if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
+					stream.nativeLog(info, "upstream_status", asset.address, "role=prefetch", response.StatusCode, response.Header.Get("Content-Type"))
+				}
 				return false
 			}
 			if response.Request != nil && response.Request.URL != nil {
