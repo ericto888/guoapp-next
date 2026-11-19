@@ -596,8 +596,6 @@ class PlaybackSession extends ChangeNotifier {
   /// 取流探活：dead 必须是明确的 listener 退出/connection refused；
   /// timeout 等恢复窗口内的瞬时错误只记为 unknown，不销毁仍可能可用的旧服务。
   Future<_StreamProbe> _probeStream() async {
-    var sawDead = false;
-    var sawUnknown = false;
     const retryDelays = <Duration>[
       Duration.zero,
       Duration(milliseconds: 300),
@@ -617,24 +615,21 @@ class PlaybackSession extends ChangeNotifier {
           return _StreamProbe.alive;
         }
         if (status.state == 'dead') {
-          sawDead = true;
           // 明确 connection refused / Serve 已退出，不需要再等待。
           DiaryService.add('[Play] 本机取流确认失效：${status.detail}');
           return _StreamProbe.dead;
         }
-        sawUnknown = true;
         DiaryService.add(
           '[Play] 本机取流状态待确认 第${attempt + 1}次：${status.detail}',
         );
       } catch (error) {
-        sawUnknown = true;
         DiaryService.add(
           '[Play] 取流探活异常 第${attempt + 1}次：${_diagnostic(error)}',
         );
       }
     }
     // 不确定状态不等于 dead；保留原播放器路径，后续播放错误再触发恢复。
-    return sawDead && !sawUnknown ? _StreamProbe.dead : _StreamProbe.unknown;
+    return _StreamProbe.unknown;
   }
 
   Future<void> _recover(String reason) async {
