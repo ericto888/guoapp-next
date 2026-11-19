@@ -922,6 +922,7 @@ class PlaybackSession extends ChangeNotifier {
     _health.reset();
     _recovery.reset();
     _playIntent = playWhenReady;
+    _resumeIntent = playWhenReady;
     _resumePosition = 0;
     _openedAt = 0;
     _index = index;
@@ -1131,7 +1132,11 @@ class PlaybackSession extends ChangeNotifier {
       unawaited(play(index, position: position));
       return;
     }
+    // Starting a preopened session is an explicit user play action.
+    // Keep the UI intent in sync with the engine intent.
     _playIntent = true;
+    _resumeIntent = true;
+    _notify();
     if (!wasEngaged) unawaited(_limitCache(player, false));
     if (ready) unawaited(player.play());
   }
