@@ -710,7 +710,7 @@ void main() {
     session.onLifecycleEvent(AppLifecycleState.inactive, source: 'test');
     session.onLifecycleEvent(AppLifecycleState.paused, source: 'test');
     session.onLifecycleEvent(AppLifecycleState.resumed, source: 'test');
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
 
     expect(repository.statusCalls, 2);
     expect(player.playCalls, 1);
