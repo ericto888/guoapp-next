@@ -346,6 +346,7 @@ void main() {
     session.start(0, position: 30);
     await pumpEventQueue();
     expect(player.state.playing, isTrue);
+    expect(session.paused, isFalse);
     expect(player.opened, hasLength(1));
     await session.saveProgress();
     expect(store.watched(_show.id)!.position, 31);
@@ -505,6 +506,26 @@ void main() {
 
     expect(repository.preloaded, isEmpty);
     expect(session.standbyIndex, -1);
+  });
+
+  test('starting a preopened session restores the user play intent', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final (session, player) = await _open(
+      repository,
+      store,
+      autoplay: false,
+    );
+
+    expect(session.ready, isTrue);
+    expect(session.paused, isTrue);
+    expect(player.state.playing, isFalse);
+
+    session.start(0);
+    await pumpEventQueue();
+
+    expect(player.state.playing, isTrue);
+    expect(session.paused, isFalse);
   });
 
   test('switching to the waiting episode swaps players at once', () async {
