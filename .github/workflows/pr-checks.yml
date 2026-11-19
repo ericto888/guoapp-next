@@ -3,6 +3,8 @@ name: PR checks
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [fix/playback-standby-lifecycle-503]
   workflow_dispatch:
 
 permissions:
@@ -47,7 +49,7 @@ jobs:
           cache-dependency-path: native/go.sum
       - name: Check Go formatting
         working-directory: native
-        run: test -z "$(gofmt -l core/app_preload.go core/app_stream.go core/app_stream_diagnostics.go)"
+        run: test -z "$(gofmt -l core/app_playback.go core/app_preload.go core/app_stream.go core/app_stream_diagnostics.go core/app_stream_test.go)"
       - name: Run Go race tests
         working-directory: native
         run: go test -race ./...
