@@ -68,12 +68,20 @@ class AppFailure implements Exception {
   String toString() => message;
 }
 
-/// 本机取流服务状态：监听是否还能接受连接，以及当前监听代次。
+/// 本机取流服务状态：区分明确失效与暂时无法判断，并携带诊断信息。
 class PlaybackStreamStatus {
-  const PlaybackStreamStatus({this.alive = true, this.epoch = 0});
+  const PlaybackStreamStatus({
+    bool alive = true,
+    this.epoch = 0,
+    String? state,
+    this.detail = '',
+  }) : alive = alive,
+       state = state ?? (alive ? 'alive' : 'dead');
 
   final bool alive;
   final int epoch;
+  final String state;
+  final String detail;
 }
 
 abstract class AppRepository {
@@ -1233,6 +1241,8 @@ class NativeRepository extends AppRepository {
     return PlaybackStreamStatus(
       alive: result['alive'] == true,
       epoch: intValue(result['epoch']),
+      state: result['state']?.toString(),
+      detail: result['detail']?.toString() ?? '',
     );
   }
 }
