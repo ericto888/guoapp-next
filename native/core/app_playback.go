@@ -42,33 +42,56 @@ func (engine *nativeEngine) nativeCancelPlayback(sequence int64) {
 	}
 }
 
-// nativePlaybackStatus 报告本机取流服务是否仍可接受连接，并返回当前监听代次
-// (streamEpoch)。应用被系统挂起后监听套接字会失效、被重建，代次随之自增；
-// 持旧代次的会话（Dart 端 PlaybackPlan.streamEpoch）应直接重建而不是换线路。
-func (engine *nativeEngine) nativePlaybackStatus() (bool, int64) {
+// nativePlaybackStatus 返回监听状态、代次和探活细节。unknown 不等于 dead，
+// 交由 Dart 端在恢复窗口内重试，避免把 iOS 网络栈恢复延迟误判成 listener 退出。
+func (engine *nativeEngine) nativePlaybackStatus() (bool, int64, string, string) {
 	engine.mu.Lock()
 	stream := engine.stream
 	epoch := engine.streamEpoch
 	engine.mu.Unlock()
-	return stream != nil && stream.nativeAlive(), epoch
+	if stream == nil {
+		return false, epoch, "dead", "listener_missing"
+	}
+	state, detail, elapsed := stream.nativeProbe()
+	if state != "alive" {
+		stream.nativeLog(nativeStreamDiagnostic{}, "listener_probe", stream.address,
+			"state="+state+" elapsed_ms="+strconv.FormatInt(elapsed.Milliseconds(), 10)+" "+detail, 0, "")
+	}
+	return state == "alive", epoch, state, detail
 }
 
-// nativeEnsureStreamLocked 确认取流监听可用，必要时关闭旧监听并重建。
-// 每次替换监听都会让 streamEpoch 自增，供 Dart 端判断旧会话是否已失效。
+// nativeEnsureStreamLocked 串行确认并替换监听，避免并发解析请求同时重建。
+// 只有明确 dead 才关闭旧 listener；unknown 时保留它，避免探活瞬时异常造成误杀。
 func (engine *nativeEngine) nativeEnsureStreamLocked() (*nativeStreamServer, int64, error) {
+	engine.streamMu.Lock()
+	defer engine.streamMu.Unlock()
+
 	engine.mu.Lock()
 	current := engine.stream
 	epoch := engine.streamEpoch
 	engine.mu.Unlock()
+
 	if current != nil {
-		if current.nativeAlive() {
+		state, detail, elapsed := current.nativeProbe()
+		if state == "unknown" {
+			for attempt, delay := range []time.Duration{250 * time.Millisecond, 500 * time.Millisecond, 750 * time.Millisecond} {
+				time.Sleep(delay)
+				state, detail, elapsed = current.nativeProbe()
+				if state != "unknown" {
+					break
+				}
+				current.nativeLog(nativeStreamDiagnostic{}, "listener_probe", current.address,
+					"attempt="+strconv.Itoa(attempt+2)+" state="+state+" elapsed_ms="+strconv.FormatInt(elapsed.Milliseconds(), 10)+" "+detail, 0, "")
+			}
+		}
+		if state == "alive" || state == "unknown" {
+			if state == "unknown" {
+				current.nativeLog(nativeStreamDiagnostic{}, "listener_probe_deferred", current.address,
+					"state=unknown "+detail, 0, "")
+			}
 			return current, epoch, nil
 		}
-		// 一次探活失败不直接判死，稍后再确认，避免误杀仍在恢复中的服务。
-		time.Sleep(120 * time.Millisecond)
-		if current.nativeAlive() {
-			return current, epoch, nil
-		}
+
 		closed := current.nativeClose()
 		engine.mu.Lock()
 		if engine.stream == current {
@@ -77,6 +100,7 @@ func (engine *nativeEngine) nativeEnsureStreamLocked() (*nativeStreamServer, int
 			engine.playbacks = map[string]nativePlaybackChoice{}
 		}
 		engine.mu.Unlock()
+
 		stream, err := newNativeStreamServer(engine.downloader)
 		if err != nil {
 			return nil, epoch, err
@@ -86,9 +110,11 @@ func (engine *nativeEngine) nativeEnsureStreamLocked() (*nativeStreamServer, int
 		engine.streamEpoch++
 		epoch = engine.streamEpoch
 		engine.mu.Unlock()
-		stream.nativeLog(nativeStreamDiagnostic{}, "listener_recreated", "", "closed_sessions="+strconv.Itoa(closed), 0, "")
+		stream.nativeLog(nativeStreamDiagnostic{}, "listener_recreated", stream.address,
+			"reason="+detail+" closed_sessions="+strconv.Itoa(closed), 0, "")
 		return stream, epoch, nil
 	}
+
 	stream, err := newNativeStreamServer(engine.downloader)
 	if err != nil {
 		return nil, epoch, err
@@ -98,5 +124,6 @@ func (engine *nativeEngine) nativeEnsureStreamLocked() (*nativeStreamServer, int
 	engine.streamEpoch++
 	epoch = engine.streamEpoch
 	engine.mu.Unlock()
+	stream.nativeLog(nativeStreamDiagnostic{}, "listener_created", stream.address, "epoch="+strconv.FormatInt(epoch, 10), 0, "")
 	return stream, epoch, nil
 }
