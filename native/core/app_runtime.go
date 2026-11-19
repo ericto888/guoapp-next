@@ -481,8 +481,10 @@ func nativeDispatch(input nativeInput) (any, error) {
 		engine.nativeCancelPlayback(input.Sequence)
 		return true, nil
 	case "playbackAlive":
-		alive, epoch := engine.nativePlaybackStatus()
-		return map[string]any{"alive": alive, "epoch": epoch}, nil
+		alive, epoch, state, detail := engine.nativePlaybackStatus()
+		return map[string]any{
+			"alive": alive, "epoch": epoch, "state": state, "detail": detail,
+		}, nil
 	case "release":
 		engine.nativeReleasePlayback(input.Session)
 		return true, nil
