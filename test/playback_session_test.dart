@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:duanju_app/core_bridge.dart';
@@ -21,6 +22,9 @@ class _PlaybackRepository extends FakeRepository {
   bool streamAlive = true;
   int statusFailures = 0;
   int statusCalls = 0;
+  int? blockedEpisode;
+  Completer<PlaybackPlan>? blockedResolve;
+  PlaybackPlan? delayedPlan;
 
   @override
   Future<PlaybackStreamStatus> playbackStatus() async {
@@ -52,8 +56,15 @@ class _PlaybackRepository extends FakeRepository {
   }) async {
     resolved.add((episode: episode.number, quality: quality));
     if (resolveFailure.isNotEmpty) throw AppFailure(resolveFailure);
+    if (episode.number == blockedEpisode && blockedResolve != null) {
+      final plan = await blockedResolve!.future;
+      delayedPlan = plan;
+      return plan;
+    }
     return _plan();
   }
+
+  PlaybackPlan planForTest() => _plan();
 
   @override
   Future<PlaybackPlan> fallback(PlaybackPlan current) async {
@@ -74,6 +85,18 @@ class _PlaybackRepository extends FakeRepository {
 
   @override
   Future<void> release(String session) async => released.add(session);
+}
+
+class _BlockingStopPlayer extends FakePlayer {
+  final stopStarted = Completer<void>();
+  final allowStop = Completer<void>();
+
+  @override
+  Future<void> stop() async {
+    if (!stopStarted.isCompleted) stopStarted.complete();
+    await allowStop.future;
+    await super.stop();
+  }
 }
 
 class _AdvancingPlayer extends FakePlayer {
@@ -415,6 +438,53 @@ void main() {
     expect(standby.stops, greaterThan(0));
     expect(repository.released, contains('session-2'));
     expect(repository.resolved.last.episode, 3);
+  });
+
+  test('episode switching does not wait for standby cleanup', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final standby = _BlockingStopPlayer();
+    final (session, _) = await _open(repository, store, standby: standby);
+    await _settle(session.player as FakePlayer);
+
+    expect(session.standbyIndex, 1);
+    final switching = session.play(2);
+    await standby.stopStarted.future;
+
+    await switching.timeout(const Duration(seconds: 1));
+    expect(session.index, 2);
+    expect(session.ready, isTrue);
+    expect(repository.resolved.last.episode, 3);
+
+    standby.allowStop.complete();
+    await pumpEventQueue();
+  });
+
+  test('a newer episode request wins over an older delayed resolve', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final (session, _) = await _open(repository, store);
+
+    repository
+      ..blockedEpisode = 2
+      ..blockedResolve = Completer<PlaybackPlan>();
+    final olderRequest = session.play(1);
+    await pumpEventQueue();
+    expect(repository.resolved, contains((episode: 2, quality: 0)));
+
+    await session.play(2).timeout(const Duration(seconds: 1));
+    expect(session.index, 2);
+    expect(session.ready, isTrue);
+    expect(repository.resolved.last, (episode: 3, quality: 0));
+
+    final stalePlan = repository.planForTest();
+    repository.blockedResolve!.complete(stalePlan);
+    await olderRequest;
+    await pumpEventQueue();
+
+    expect(session.index, 2);
+    expect(session.ready, isTrue);
+    expect(repository.released, contains(stalePlan.session));
   });
 
   test('a locked boost survives pausing and switching episodes', () async {

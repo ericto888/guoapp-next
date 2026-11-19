@@ -775,7 +775,6 @@ class PlaybackSession extends ChangeNotifier {
         (_standbyPlan == null || _standbyPlan!.streamEpoch == _streamEpoch)) {
       return _swap(index, playWhenReady);
     }
-    await _dropStandby();
     final candidate = recovery == null
         ? _preloader.take(
             detail.drama,
@@ -821,6 +820,14 @@ class PlaybackSession extends ChangeNotifier {
       _ => '正在准备播放',
     };
     _notify();
+    // Detach standby cleanup from the active episode request. The cleanup
+    // still serializes open -> stop/dispose -> release, but a slow standby
+    // player must never hold up a user-requested episode switch.
+    unawaited(
+      _dropStandby().catchError((Object error) {
+        DiaryService.add('[Play] 待播播放器清理失败：${_diagnostic(error)}');
+      }),
+    );
     PlaybackPlan? prepared;
     PlaybackPlan? retained;
     var installed = false;
@@ -850,7 +857,15 @@ class PlaybackSession extends ChangeNotifier {
               quality: _quality,
               online: _online,
             );
-      if (prepared == null) return;
+      if (prepared == null) {
+        if (_current(ticket)) {
+          DiaryService.add('[Play] 播放请求未返回有效结果');
+          _loading = false;
+          _error = '播放请求已取消，请重试';
+          _notify();
+        }
+        return;
+      }
       final plan = prepared;
       await _serialize(() async {
         if (!_current(ticket)) {
