@@ -508,25 +508,28 @@ void main() {
     expect(session.standbyIndex, -1);
   });
 
-  test('starting a preopened session restores the user play intent', () async {
-    final repository = _PlaybackRepository();
-    final store = await openStore();
-    final (session, player) = await _open(
-      repository,
-      store,
-      autoplay: false,
-    );
+  test(
+    'starting a preopened session restores the user play intent',
+    () async {
+      final repository = _PlaybackRepository();
+      final store = await openStore();
+      final (session, player) = await _open(
+        repository,
+        store,
+        autoplay: false,
+      );
 
-    expect(session.ready, isTrue);
-    expect(session.paused, isTrue);
-    expect(player.state.playing, isFalse);
+      expect(session.ready, isTrue);
+      expect(session.paused, isTrue);
+      expect(player.state.playing, isFalse);
 
-    session.start(0);
-    await pumpEventQueue();
+      session.start(0);
+      await pumpEventQueue();
 
-    expect(player.state.playing, isTrue);
-    expect(session.paused, isFalse);
-  });
+      expect(player.state.playing, isTrue);
+      expect(session.paused, isFalse);
+    },
+  );
 
   test('switching to the waiting episode swaps players at once', () async {
     final repository = _PlaybackRepository();
@@ -545,23 +548,26 @@ void main() {
     expect(store.watched(_show.id)!.episode, 1);
   });
 
-  test('swapping to a standby player preserves an explicit paused intent', () async {
-    final repository = _PlaybackRepository();
-    final store = await openStore();
-    final standby = FakePlayer();
-    final (session, player) = await _open(
-      repository,
-      store,
-      standby: standby,
-    );
-    await _settle(player);
+  test(
+    'swapping to a standby player preserves an explicit paused intent',
+    () async {
+      final repository = _PlaybackRepository();
+      final store = await openStore();
+      final standby = FakePlayer();
+      final (session, player) = await _open(
+        repository,
+        store,
+        standby: standby,
+      );
+      await _settle(player);
 
-    await session.play(1, playWhenReady: false);
+      await session.play(1, playWhenReady: false);
 
-    expect(identical(session.player, standby), isTrue);
-    expect(session.paused, isTrue);
-    expect(standby.state.playing, isFalse);
-  });
+      expect(identical(session.player, standby), isTrue);
+      expect(session.paused, isTrue);
+      expect(standby.state.playing, isFalse);
+    },
+  );
 
   test('only buffering that lasts counts as stalled', () async {
     final repository = _PlaybackRepository();
