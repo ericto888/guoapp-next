@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"syscall"
 )
 
 type nativeStreamDiagnosticKey struct{}
@@ -59,13 +60,25 @@ func nativeStreamError(err error) string {
 	if errors.As(err, &dns) {
 		return "dns"
 	}
-	var op *net.OpError
-	if errors.As(err, &op) && op.Op == "dial" {
-		return "connect"
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return "connection_refused"
+	}
+	if errors.Is(err, syscall.ENETUNREACH) {
+		return "network_unreachable"
+	}
+	if errors.Is(err, syscall.EHOSTUNREACH) {
+		return "host_unreachable"
+	}
+	if errors.Is(err, syscall.ECONNRESET) {
+		return "connection_reset"
 	}
 	var timeout net.Error
 	if errors.As(err, &timeout) && timeout.Timeout() {
 		return "timeout"
+	}
+	var op *net.OpError
+	if errors.As(err, &op) && op.Op == "dial" {
+		return "connect"
 	}
 	if errors.Is(err, io.ErrUnexpectedEOF) {
 		return "unexpected_eof"
