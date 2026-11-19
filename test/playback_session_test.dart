@@ -545,6 +545,24 @@ void main() {
     expect(store.watched(_show.id)!.episode, 1);
   });
 
+  test('swapping to a standby player preserves an explicit paused intent', () async {
+    final repository = _PlaybackRepository();
+    final store = await openStore();
+    final standby = FakePlayer();
+    final (session, player) = await _open(
+      repository,
+      store,
+      standby: standby,
+    );
+    await _settle(player);
+
+    await session.play(1, playWhenReady: false);
+
+    expect(identical(session.player, standby), isTrue);
+    expect(session.paused, isTrue);
+    expect(standby.state.playing, isFalse);
+  });
+
   test('only buffering that lasts counts as stalled', () async {
     final repository = _PlaybackRepository();
     final store = await openStore();
