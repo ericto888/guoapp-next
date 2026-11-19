@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -57,7 +58,8 @@ type nativeStreamServer struct {
 	lan        *http.Server
 	lanPort    int
 	// 系统可能在应用挂起后回收监听套接字，Serve 返回即视为失效。
-	failed atomic.Bool
+	failed     atomic.Bool
+	serveError string // protected by mu
 }
 
 func (stream *nativeStreamServer) lanOrigin(device string) (string, error) {
@@ -132,26 +134,51 @@ func newNativeStreamServer(d *Downloader) (*nativeStreamServer, error) {
 	stream.server = server
 	go func() {
 		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			stream.mu.Lock()
+			stream.serveError = err.Error()
 			stream.failed.Store(true)
-			stream.nativeLog(nativeStreamDiagnostic{}, "listener_error", "", err.Error(), 0, "")
+			stream.mu.Unlock()
+			stream.nativeLog(nativeStreamDiagnostic{}, "listener_error", stream.address, err.Error(), 0, "")
 		}
 	}()
 	return stream, nil
 }
 
-// nativeAlive 判断本机取流服务是否仍可接受连接。
-// iOS 在后台回收监听套接字后，Serve 已经退出但地址仍留在旧播放地址里，
-// 播放器随后只会收到 connection refused，因此需要主动探活并重建。
+// nativeProbe 区分明确失效与暂时无法判断。只有 listener 已退出或收到
+// connection refused 才判定 dead；超时、网络栈恢复中的其他错误返回 unknown。
+func (stream *nativeStreamServer) nativeProbe() (state, detail string, elapsed time.Duration) {
+	started := time.Now()
+	defer func() { elapsed = time.Since(started) }()
+	if stream == nil {
+		return "dead", "listener=nil", 0
+	}
+	stream.mu.Lock()
+	listener := stream.listener
+	failed := stream.failed.Load()
+	serveError := stream.serveError
+	stream.mu.Unlock()
+	if listener == nil {
+		return "dead", "listener=nil", 0
+	}
+	if failed {
+		return "dead", "serve_error="+serveError, 0
+	}
+	address := listener.Addr().String()
+	connection, err := net.DialTimeout("tcp", address, 350*time.Millisecond)
+	if err == nil {
+		_ = connection.Close()
+		return "alive", "address="+address, 0
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return "dead", "address="+address+" error=connection_refused", 0
+	}
+	return "unknown", "address="+address+" error="+nativeStreamError(err), 0
+}
+
+// nativeAlive 保留给不需要诊断细节的内部调用。
 func (stream *nativeStreamServer) nativeAlive() bool {
-	if stream.failed.Load() || stream.listener == nil {
-		return false
-	}
-	connection, err := net.DialTimeout("tcp", stream.listener.Addr().String(), 300*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	_ = connection.Close()
-	return true
+	state, _, _ := stream.nativeProbe()
+	return state == "alive"
 }
 
 // nativeClose 关闭监听与所有会话，返回关闭前仍在跟踪的会话数量。
