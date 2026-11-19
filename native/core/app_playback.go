@@ -45,14 +45,16 @@ func (engine *nativeEngine) nativeCancelPlayback(sequence int64) {
 // nativePlaybackStatus 返回监听状态、代次和探活细节。unknown 不等于 dead，
 // 交由 Dart 端在恢复窗口内重试，避免把 iOS 网络栈恢复延迟误判成 listener 退出。
 func (engine *nativeEngine) nativePlaybackStatus() (bool, int64, string, string) {
-	engine.streamMu.Lock()
-	defer engine.streamMu.Unlock()
-	engine.mu.Lock()
-	stream := engine.stream
-	epoch := engine.streamEpoch
-	engine.mu.Unlock()
-	if stream == nil {
-		return false, epoch, "dead", "listener_missing"
+	// 探活不能只报告 dead：iOS 从后台恢复时，播放器仍持有旧地址。
+	// 在同一把 streamMu 下先确保 listener 可用；若旧 listener 已失效，
+	// 立即创建新 listener 并递增 epoch，让 Dart 丢弃旧会话并重新解析。
+	stream, epoch, err := engine.nativeEnsureStreamLocked()
+	if err != nil {
+		detail := "listener_recreate_failed"
+		if err.Error() != "" {
+			detail += " error=" + err.Error()
+		}
+		return false, epoch, "dead", detail
 	}
 	state, detail, elapsed := stream.nativeProbe()
 	if state != "alive" {
