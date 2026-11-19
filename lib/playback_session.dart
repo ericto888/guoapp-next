@@ -593,28 +593,48 @@ class PlaybackSession extends ChangeNotifier {
     });
   }
 
-  /// 取流探活：本机监听被系统回收后，旧播放地址只会得到 connection refused。
+  /// 取流探活：dead 必须是明确的 listener 退出/connection refused；
+  /// timeout 等恢复窗口内的瞬时错误只记为 unknown，不销毁仍可能可用的旧服务。
   Future<_StreamProbe> _probeStream() async {
     var sawDead = false;
-    var sawError = false;
-    for (var attempt = 0; attempt < 2; attempt++) {
+    var sawUnknown = false;
+    const retryDelays = <Duration>[
+      Duration.zero,
+      Duration(milliseconds: 300),
+      Duration(milliseconds: 500),
+      Duration(milliseconds: 700),
+    ];
+    for (var attempt = 0; attempt < retryDelays.length; attempt++) {
       if (attempt > 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 150));
+        await Future<void>.delayed(retryDelays[attempt]);
       }
       try {
         final status = await repository.playbackStatus().timeout(
-          const Duration(seconds: 2),
+          const Duration(milliseconds: 1200),
         );
         if (!_closed) _streamEpoch = status.epoch;
-        if (status.alive) return _StreamProbe.alive;
-        sawDead = true;
+        if (status.alive || status.state == 'alive') {
+          return _StreamProbe.alive;
+        }
+        if (status.state == 'dead') {
+          sawDead = true;
+          // 明确 connection refused / Serve 已退出，不需要再等待。
+          DiaryService.add('[Play] 本机取流确认失效：${status.detail}');
+          return _StreamProbe.dead;
+        }
+        sawUnknown = true;
+        DiaryService.add(
+          '[Play] 本机取流状态待确认 第${attempt + 1}次：${status.detail}',
+        );
       } catch (error) {
-        DiaryService.add('[Play] 取流探活异常：${_diagnostic(error)}');
-        sawError = true;
+        sawUnknown = true;
+        DiaryService.add(
+          '[Play] 取流探活异常 第${attempt + 1}次：${_diagnostic(error)}',
+        );
       }
     }
-    // 一次 false 一次异常仍属「未确认」，避免误触发重建。
-    return sawDead && !sawError ? _StreamProbe.dead : _StreamProbe.unknown;
+    // 不确定状态不等于 dead；保留原播放器路径，后续播放错误再触发恢复。
+    return sawDead && !sawUnknown ? _StreamProbe.dead : _StreamProbe.unknown;
   }
 
   Future<void> _recover(String reason) async {
