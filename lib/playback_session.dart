@@ -776,7 +776,7 @@ class PlaybackSession extends ChangeNotifier {
       return _swap(index, playWhenReady);
     }
     await _dropStandby();
-    final warmed = recovery == null
+    final candidate = recovery == null
         ? _preloader.take(
             detail.drama,
             detail.episodes[index],
@@ -784,6 +784,15 @@ class PlaybackSession extends ChangeNotifier {
             online: _online,
           )
         : null;
+    final warmed = candidate != null && candidate.streamEpoch == _streamEpoch
+        ? candidate
+        : null;
+    if (candidate != null && warmed == null) {
+      DiaryService.add(
+        '[Play] 丢弃过期预加载会话 代次=${candidate.streamEpoch}/$_streamEpoch',
+      );
+      unawaited(_release(candidate.session));
+    }
     _preloader.clear();
     final ticket = ++_generation;
     _seekSequence++;
@@ -979,6 +988,15 @@ class PlaybackSession extends ChangeNotifier {
     );
     if (plan == null) {
       _standbyIndex = -1;
+      return;
+    }
+    if (plan.streamEpoch != _streamEpoch) {
+      _standbyIndex = -1;
+      DiaryService.add(
+        '[Play] 待机预加载代次已过期，放弃预开 '
+        '代次=${plan.streamEpoch}/$_streamEpoch',
+      );
+      unawaited(_release(plan.session));
       return;
     }
     _standbyPlan = plan;
