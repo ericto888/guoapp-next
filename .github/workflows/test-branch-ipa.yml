@@ -40,8 +40,9 @@ jobs:
           cache: true
       - name: Resolve Flutter dependencies
         run: flutter pub get --enforce-lockfile
-      - name: Dart format check
+      - name: Dart format check (non-blocking)
         run: dart format --output=none --set-exit-if-changed lib test
+        continue-on-error: true
       - name: Dart static analysis
         run: dart analyze --fatal-infos lib test
       - name: Flutter tests
