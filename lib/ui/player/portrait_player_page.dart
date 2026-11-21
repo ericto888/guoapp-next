@@ -486,7 +486,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             if (!didPop) _say('已锁定，点屏幕显示锁图标');
           },
           child: Scaffold(
-            backgroundColor: Colors.black,
+            backgroundColor: const Color(0xFF1B1B1B),
             extendBody: true,
             body: Stack(
               fit: StackFit.expand,
@@ -769,7 +769,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           right: 16,
           bottom: bottom + 108,
           height: 124,
-          child: _chrome(_dramaInfo(context)),
+          child: _dragging ? const SizedBox.shrink() : _chrome(_dramaInfo(context)),
         ),
         Positioned(
           key: const ValueKey('progress'),
@@ -844,7 +844,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             height: bottom + _maskHeight,
             child: IgnorePointer(
               child: ColoredBox(
-                color: Colors.black,
+                color: const Color(0xFF1B1B1B),
                 child: Padding(
                   padding: EdgeInsets.only(bottom: bottom),
                   child: Row(
