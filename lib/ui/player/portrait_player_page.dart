@@ -36,10 +36,12 @@ class PortraitPlayerPage extends StatefulWidget {
     super.key,
     required this.store,
     required this.handle,
+    this.onFullscreen,
     this.onMiniWindow,
   });
   final LocalStore store;
   final PlaybackHandle handle;
+  final VoidCallback? onFullscreen;
   final VoidCallback? onMiniWindow;
 
   @override
@@ -57,6 +59,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   bool _edgeHinted = false;
   bool _holding = false;
   bool _overMask = false;
+  bool _descExpanded = false;
   int _heldIndex = -1;
   bool _dragging = false;
   double? _seekValue;
@@ -692,6 +695,14 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           ),
         ),
         Positioned(
+          key: const ValueKey('drama-info'),
+          left: 16,
+          right: 16,
+          bottom: bottom + 100,
+          height: 124,
+          child: _chrome(_dramaInfo(context)),
+        ),
+        Positioned(
           key: const ValueKey('progress'),
           left: 16,
           right: 16,
@@ -857,6 +868,86 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 onPressed: () => unawaited(_session.playNextSeason()),
                 child: Text('播放${season.label}'),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dramaInfo(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final session = _session;
+    final drama = session.detail.drama;
+    final description = drama.description.trim();
+    final meta = [
+      SourceSite.byId(drama.source).name,
+      if (drama.releaseLabel != '状态未知') drama.releaseLabel,
+      if (drama.category.isNotEmpty) drama.category,
+    ];
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: SingleChildScrollView(
+        reverse: true,
+        padding: const EdgeInsets.only(right: 4, bottom: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              drama.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                height: 1.3,
+                shadows: [Shadow(color: Color(0x88000000), blurRadius: 4)],
+              ),
+            ),
+            const SizedBox(height: 4),
+            if (meta.isNotEmpty)
+              Text(
+                meta.join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: .72),
+                ),
+              ),
+            const SizedBox(height: 5),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    '第 ${session.episode.number} 集  |  ${description.isEmpty ? '暂无简介' : description}',
+                    maxLines: _descExpanded ? null : 2,
+                    overflow: _descExpanded ? null : TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: description.isEmpty
+                          ? Colors.white.withValues(alpha: .65)
+                          : Colors.white.withValues(alpha: .92),
+                    ),
+                  ),
+                ),
+                if (description.length > 20)
+                  TextButton(
+                    onPressed: () => setState(() => _descExpanded = !_descExpanded),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.only(left: 6),
+                      minimumSize: const Size(0, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(_descExpanded ? '收起' : '展开'),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
