@@ -9,7 +9,7 @@ import '../../local_store.dart';
 import '../../picture_in_picture.dart';
 import '../../playback_session.dart';
 import '../app_scope.dart';
-import 'landscape_player_page.dart';
+import 'upstream_landscape_player_page.dart' as upstream;
 import 'mini_player.dart';
 import 'playback_handle.dart';
 import 'player_page.dart';
@@ -267,7 +267,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
       return switch (form) {
         FormFactor.phone
             when _wideVideo && !portraitStyle =>
-          LandscapePlayerPage(
+          upstream.LandscapePlayerPage(
             store: widget.store,
             handle: widget.handle,
             onMiniWindow: mini,
@@ -297,7 +297,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
           when _wideVideo &&
               !(portraitStyle &&
                   MediaQuery.orientationOf(context) == Orientation.portrait) =>
-        LandscapePlayerPage(
+        upstream.LandscapePlayerPage(
           store: widget.store,
           handle: widget.handle,
           onMiniWindow: mini,
@@ -305,6 +305,11 @@ class _PlaybackPageState extends State<PlaybackPage> {
       FormFactor.phone => PortraitPlayerPage(
         store: widget.store,
         handle: widget.handle,
+        onFullscreen: _wideVideo
+            ? () => unawaited(
+                AppDevice.setPlayerOrientation(PlayerOrientation.landscape),
+              )
+            : null,
         onMiniWindow: mini,
       ),
       FormFactor.television => TelevisionPlayerPage(handle: widget.handle),
@@ -332,6 +337,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
         : PortraitPlayerPage(
             store: widget.store,
             handle: widget.handle,
+            onFullscreen: _wideVideo ? () => _padFullscreen.value = true : null,
             onMiniWindow: mini,
           );
   }
