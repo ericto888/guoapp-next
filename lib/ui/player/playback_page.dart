@@ -159,6 +159,17 @@ class _PlaybackPageState extends State<PlaybackPage> {
     final orientation = MediaQuery.orientationOf(context);
     final previous = _lastOrientation;
     _lastOrientation = orientation;
+    // 从手动全屏横屏退出并回到竖屏后，重新交还方向控制权给系统传感器。
+    // _wideAutoRotationApplied 在进入全屏前已经为 true，因此不能依赖
+    // _syncWideAutoRotation 的状态去重；这里必须显式重新应用 auto。
+    if (previous == Orientation.landscape &&
+        orientation == Orientation.portrait &&
+        !desktopPlatform &&
+        AppScope.formFactorOf(context) == FormFactor.phone &&
+        _wideVideo &&
+        widget.store.playbackPreferences.portraitStyleForWide) {
+      unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
+    }
     if (previous == Orientation.portrait &&
         orientation == Orientation.landscape &&
         _wideVideo &&
