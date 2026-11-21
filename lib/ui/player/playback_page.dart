@@ -261,6 +261,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
   Widget _page(BuildContext context) {
     final form = AppScope.formFactorOf(context);
     final mini = _pip.available ? () => unawaited(_enterMini()) : null;
+    final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
     if (desktopPlatform) {
       final size = MediaQuery.sizeOf(context);
       return switch (form) {
