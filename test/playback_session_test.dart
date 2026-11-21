@@ -190,11 +190,17 @@ void main() {
     final repository = _PlaybackRepository();
     final store = await openStore();
     final (session, player) = await _open(repository, store);
+    var observedAutomaticAdvance = false;
+    session.addListener(() {
+      if (session.autoAdvancing) observedAutomaticAdvance = true;
+    });
 
     player.progress(_seconds(99.5), duration: _seconds(100));
     player.finish();
     await pumpEventQueue();
 
+    expect(observedAutomaticAdvance, isTrue);
+    expect(session.autoAdvancing, isFalse);
     expect(session.index, 1);
     expect(session.ready, isTrue);
     expect(player.opened, hasLength(2));
