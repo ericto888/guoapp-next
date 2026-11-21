@@ -1817,9 +1817,20 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                   maxWidth * 9 / 16,
                   maxHeight * .78,
                 );
+                // 将视频画面中心对齐手机屏幕中心。PageView 位于顶部栏
+                // 与底部选集栏之间，因此不能直接使用视频区自身的 Center。
+                final screenHeight = MediaQuery.sizeOf(context).height;
+                final topInset = MediaQuery.paddingOf(context).top;
+                const topBarHeight = 52.0;
+                const videoFooterHeight = 44.0; // 间距 +「全屏观看」入口
+                final targetColumnCenter =
+                    screenHeight / 2 -
+                    (topInset + topBarHeight) +
+                    videoFooterHeight / 2;
+                final verticalAlignment =
+                    (2 * targetColumnCenter / maxHeight - 1).clamp(-1.0, 1.0);
                 return Align(
-                  // 视频整体偏下：上方留更多黑边，贴近红果的排版。
-                  alignment: const Alignment(0, .8),
+                  alignment: Alignment(0, verticalAlignment),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
