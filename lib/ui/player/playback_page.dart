@@ -10,7 +10,7 @@ import '../../picture_in_picture.dart';
 import '../../playback_session.dart';
 import '../app_scope.dart';
 import 'upstream_landscape_player_page.dart' as upstream;
-import 'landscape_player_page.dart' as customLandscape;
+import 'landscape_player_page.dart' as custom_landscape;
 import 'mini_player.dart';
 import 'playback_handle.dart';
 import 'player_page.dart';
@@ -295,7 +295,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
             when _wideVideo &&
                 portraitStyle &&
                 MediaQuery.orientationOf(context) == Orientation.landscape =>
-          customLandscape.LandscapePlayerPage(
+          custom_landscape.LandscapePlayerPage(
             store: widget.store,
             handle: widget.handle,
             onFullscreen: () {},
@@ -333,7 +333,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
           when _wideVideo &&
               portraitStyle &&
               MediaQuery.orientationOf(context) == Orientation.landscape =>
-        customLandscape.LandscapePlayerPage(
+        custom_landscape.LandscapePlayerPage(
           store: widget.store,
           handle: widget.handle,
           onFullscreen: () {},
