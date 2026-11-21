@@ -1,0 +1,98 @@
+name: Test branch and build iOS IPA
+
+on:
+  push:
+    branches:
+      - test/upstream-portrait-player-layout
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOPROXY: https://proxy.golang.org,direct
+  GOSUMDB: sum.golang.org
+  BUNDLED_MODULES: bundled-modules/hongguo
+  PYTHONUTF8: '1'
+
+jobs:
+  checks:
+    name: Flutter and Go checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/go.mod
+          cache-dependency-path: native/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Resolve Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Dart format check
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Dart static analysis
+        run: dart analyze --fatal-infos lib test
+      - name: Flutter tests
+        run: flutter test --dart-define=DISABLE_REMOTE_IMAGES=true
+      - name: Hongguo focused Flutter tests
+        run: flutter test --dart-define=DISABLE_REMOTE_IMAGES=true --dart-define=ONLY_HONGGUO=true
+      - name: Go tests
+        working-directory: native
+        run: go test -race ./...
+
+  ios:
+    name: Build unsigned iOS test IPA
+    needs: checks
+    runs-on: macos-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: guoapp-modules/hongguo
+          path: bundled-modules/hongguo
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/go.mod
+          cache-dependency-path: native/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Check Xcode and prepare iOS toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+          if ! command -v pod >/dev/null 2>&1; then
+            brew install cocoapods
+          fi
+          pod --version
+          go version
+          flutter --version
+          flutter precache --ios
+      - name: Build and validate unsigned IPA
+        run: python scripts/build_ios.py
+      - name: Upload test IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: guoapp-test-ipa-${{ github.sha }}
+          path: dist/ios/*.ipa
+          if-no-files-found: error
+          retention-days: 14
