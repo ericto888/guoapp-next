@@ -662,7 +662,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             final videoBottom = (screen.height + fitted.height) / 2 - 32;
             // 按视频实际显示区域放置，并确保按钮位于简介卡片上方。
             final introTop = screen.height - bottom - 256;
-            return (videoBottom + 8).clamp(0.0, math.max(0.0, introTop - 44));
+            return (videoBottom + 8)
+                .clamp(0.0, math.max(0.0, introTop - 44))
+                .toDouble();
           })()
         : null;
     _syncSystemBars();
