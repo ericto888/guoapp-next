@@ -228,6 +228,7 @@ class PlaybackSession extends ChangeNotifier {
   int _sleepMinutes = 0;
   bool _sleepAtEpisodeEnd = false;
   bool _advancingSeason = false;
+  bool _autoAdvancing = false;
   Future<void> _operations = Future<void>.value();
   Future<void> _rates = Future<void>.value();
   int _index;
@@ -293,6 +294,7 @@ class PlaybackSession extends ChangeNotifier {
   String? get saveWarning => _saveWarning;
   bool get ready => !_loading && _error == null;
   bool get advancingSeason => _advancingSeason;
+  bool get autoAdvancing => _autoAdvancing;
   DramaSeason? get nextSeason => detail.nextSeason;
 
   /// Exposes the same explicit next-season action used by the portrait pager.
@@ -492,7 +494,8 @@ class PlaybackSession extends ChangeNotifier {
         : position < duration - const Duration(seconds: 2)) {
       _queueRecovery('early_completion');
     } else if (_foreground && hasNext && !_sleepAtEpisodeEnd) {
-      unawaited(play(_index + 1));
+      _autoAdvancing = true;
+      unawaited(play(_index + 1).whenComplete(() => _autoAdvancing = false));
     } else if (_foreground &&
         !_sleepAtEpisodeEnd &&
         detail.nextSeason != null) {

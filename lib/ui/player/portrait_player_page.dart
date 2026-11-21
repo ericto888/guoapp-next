@@ -136,7 +136,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     }
     _subscriptions.add(
       stream.playing.listen((playing) {
-        if (playing) _wake();
+        if (playing && !_session.autoAdvancing) _wake();
         _refresh();
       }),
     );
@@ -222,10 +222,19 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   void _refresh() {
     final switched = _session.index != _lastIndex;
     if (_session.paused != _lastPaused || switched) {
+      final quietAutoAdvance =
+          switched &&
+          _session.autoAdvancing &&
+          !_session.paused &&
+          !_keepWidePortraitChrome;
       final quiet = switched && _idle && !_session.paused;
       _lastPaused = _session.paused;
       _lastIndex = _session.index;
-      if (quiet) {
+      if (quietAutoAdvance) {
+        _quietSwitch = true;
+        _idleTimer?.cancel();
+        _idle = true;
+      } else if (quiet) {
         _quietSwitch = true;
       } else {
         _wake();
