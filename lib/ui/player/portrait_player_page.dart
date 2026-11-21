@@ -486,7 +486,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             if (!didPop) _say('已锁定，点屏幕显示锁图标');
           },
           child: Scaffold(
-            backgroundColor: const Color(0xFF1B1B1B),
+            backgroundColor: Colors.black,
             extendBody: true,
             body: Stack(
               fit: StackFit.expand,
