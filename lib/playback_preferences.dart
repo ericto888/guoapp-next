@@ -136,6 +136,7 @@ class PlaybackPreferences {
   final bool showNetworkSpeed;
   final bool autoHideControls;
   final bool hideSystemBars;
+  final bool portraitStyleForWide;
   final bool autoPictureInPicture;
   final VideoFit videoFit;
 
