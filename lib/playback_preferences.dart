@@ -289,6 +289,7 @@ class PlaybackPreferences {
       showNetworkSpeed: value['showNetworkSpeed'] as bool? ?? true,
       autoHideControls: value['autoHideControls'] as bool? ?? true,
       hideSystemBars: value['hideSystemBars'] as bool? ?? true,
+      portraitStyleForWide: value['portraitStyleForWide'] as bool? ?? false,
       autoPictureInPicture: value['autoPictureInPicture'] as bool? ?? false,
       videoFit: VideoFit.values.asNameMap()[value['videoFit']] ?? VideoFit.auto,
     );
