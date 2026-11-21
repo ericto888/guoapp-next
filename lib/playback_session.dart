@@ -516,19 +516,48 @@ class PlaybackSession extends ChangeNotifier {
     );
   }
 
+  bool get switchingSeason => _advancingSeason;
+
   Future<void> _playNextSeason() async {
     final season = detail.nextSeason;
-    if (_advancingSeason || season == null || !_usable) return;
+    if (season == null) return;
+    DiaryService.add('[Play] 本季播完，切换到${season.label}');
+    await _switchSeason(season, resume: false);
+  }
+
+  Future<bool> playSeason(DramaSeason season) async {
+    if (season.drama.id == detail.drama.id) return true;
+    DiaryService.add('[Play] 手动切换到${season.label}');
+    return _switchSeason(season, resume: true);
+  }
+
+  Future<bool> _switchSeason(DramaSeason season, {required bool resume}) async {
+    if (_advancingSeason || !_usable) return false;
     _advancingSeason = true;
     final ticket = _generation;
-    DiaryService.add('[Play] 本季播完，切换到${season.label}');
     await _dropStandby();
     _preloader.clear();
+    _notify();
     try {
       await saveProgress();
       final next = await repository.detail(season.drama);
-      if (!_current(ticket) || !_foreground) return;
-      if (next.episodes.isEmpty) throw AppFailure('下一季暂时没有可播放的分集');
+      if (!_current(ticket) || !_foreground) return false;
+      if (next.episodes.isEmpty) {
+        throw AppFailure('${season.label}暂时没有可播放的分集');
+      }
+      final watch = resume ? store.watched(season.drama.id) : null;
+      var index = 0;
+      if (watch != null) {
+        final savedIndex = next.episodes.indexWhere(
+          (episode) => episode.number == watch.episode,
+        );
+        if (savedIndex >= 0) index = savedIndex;
+      }
+      final position = watch != null &&
+              !watch.finished &&
+              watch.episode == next.episodes[index].number
+          ? watch.position
+          : 0.0;
       detail = DramaDetail(
         repository.catalogUpdates.current(season.drama).merge(next.drama),
         next.episodes,
@@ -536,16 +565,19 @@ class PlaybackSession extends ChangeNotifier {
         seasons: detail.seasons,
       );
       _openedIndex = -1;
-      _index = 0;
+      _index = index;
       _online = false;
       _notify();
-      await play(0);
+      await play(index, position: position);
+      return true;
     } catch (error) {
-      DiaryService.add('[Play] 切换下一季失败：${_diagnostic(error)}');
+      DiaryService.add('[Play] 切换${season.label}失败：${_diagnostic(error)}');
       if (_current(ticket)) _stop();
       _notify();
+      return false;
     } finally {
       _advancingSeason = false;
+      _notify();
     }
   }
 
