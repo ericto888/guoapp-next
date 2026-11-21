@@ -103,6 +103,7 @@ class PlaybackPreferences {
     this.showNetworkSpeed = true,
     this.autoHideControls = true,
     this.hideSystemBars = true,
+    this.portraitStyleForWide = false,
     this.autoPictureInPicture = false,
     this.videoFit = VideoFit.auto,
   });
