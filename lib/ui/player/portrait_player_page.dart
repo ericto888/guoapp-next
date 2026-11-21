@@ -914,7 +914,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   Widget _dramaInfo(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final session = _session;
     final drama = session.detail.drama;
     final description = drama.description.trim();
