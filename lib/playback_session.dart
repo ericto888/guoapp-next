@@ -495,9 +495,7 @@ class PlaybackSession extends ChangeNotifier {
       _queueRecovery('early_completion');
     } else if (_foreground && hasNext && !_sleepAtEpisodeEnd) {
       _autoAdvancing = true;
-      unawaited(
-        play(_index + 1).whenComplete(() => _autoAdvancing = false),
-      );
+      unawaited(play(_index + 1).whenComplete(() => _autoAdvancing = false));
     } else if (_foreground &&
         !_sleepAtEpisodeEnd &&
         detail.nextSeason != null) {
