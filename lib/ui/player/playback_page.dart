@@ -291,7 +291,11 @@ class _PlaybackPageState extends State<PlaybackPage> {
     }
     return switch (form) {
       FormFactor.pad || FormFactor.window => _padPage(context, mini),
-      FormFactor.phone when _wideVideo => LandscapePlayerPage(
+      FormFactor.phone
+          when _wideVideo &&
+              !(portraitStyle &&
+                  MediaQuery.orientationOf(context) == Orientation.portrait) =>
+        LandscapePlayerPage(
         store: widget.store,
         handle: widget.handle,
         onMiniWindow: mini,
