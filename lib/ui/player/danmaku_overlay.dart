@@ -141,8 +141,8 @@ class DanmakuOverlay extends StatelessWidget {
             video ?? const Size(9, 16),
             MediaQuery.devicePixelRatioOf(context),
           );
-          final width = widget.fillBounds ? box.width : math.min(box.width, shown.width);
-          final height = widget.fillBounds ? box.height : math.min(box.height, shown.height);
+          final width = fillBounds ? box.width : math.min(box.width, shown.width);
+          final height = fillBounds ? box.height : math.min(box.height, shown.height);
           final fontSize = (width < 600 ? 16.0 : 20.0) * style.scale;
           final scaler = MediaQuery.textScalerOf(context);
           final rowHeight = scaler.scale(fontSize) * 1.5;
