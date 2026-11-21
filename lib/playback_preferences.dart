@@ -168,6 +168,7 @@ class PlaybackPreferences {
     bool? showNetworkSpeed,
     bool? autoHideControls,
     bool? hideSystemBars,
+    bool? portraitStyleForWide,
     bool? autoPictureInPicture,
     VideoFit? videoFit,
   }) => PlaybackPreferences(
