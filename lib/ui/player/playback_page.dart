@@ -265,11 +265,13 @@ class _PlaybackPageState extends State<PlaybackPage> {
     if (desktopPlatform) {
       final size = MediaQuery.sizeOf(context);
       return switch (form) {
-        FormFactor.phone when _wideVideo && !portraitStyle => LandscapePlayerPage(
-          store: widget.store,
-          handle: widget.handle,
-          onMiniWindow: mini,
-        ),
+        FormFactor.phone
+            when _wideVideo && !portraitStyle =>
+          LandscapePlayerPage(
+            store: widget.store,
+            handle: widget.handle,
+            onMiniWindow: mini,
+          ),
         FormFactor.phone => PortraitPlayerPage(
           store: widget.store,
           handle: widget.handle,
@@ -296,10 +298,10 @@ class _PlaybackPageState extends State<PlaybackPage> {
               !(portraitStyle &&
                   MediaQuery.orientationOf(context) == Orientation.portrait) =>
         LandscapePlayerPage(
-        store: widget.store,
-        handle: widget.handle,
-        onMiniWindow: mini,
-      ),
+          store: widget.store,
+          handle: widget.handle,
+          onMiniWindow: mini,
+        ),
       FormFactor.phone => PortraitPlayerPage(
         store: widget.store,
         handle: widget.handle,
