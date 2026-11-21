@@ -797,7 +797,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                       ),
                     ),
                     Text(
-                      session.episode.label,
+                      session.episode.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
