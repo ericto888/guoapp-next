@@ -228,6 +228,7 @@ class PlaybackPreferences {
     'showNetworkSpeed': showNetworkSpeed,
     'autoHideControls': autoHideControls,
     'hideSystemBars': hideSystemBars,
+    'portraitStyleForWide': portraitStyleForWide,
     'autoPictureInPicture': autoPictureInPicture,
     'videoFit': videoFit.name,
   };
