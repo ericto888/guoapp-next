@@ -1187,16 +1187,27 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         .clamp(0.0, max);
     final dragging = _dragging;
     final colors = Theme.of(context).colorScheme;
+    final widePortrait = _keepWidePortraitChrome;
+    // 横片竖持采用红果风格的深色细进度条；原生竖片保留主题色样式。
+    const hongguoProgress = Color(0xFFC83A36);
+    const hongguoTrack = Color(0xFF383838);
+    const hongguoBuffered = Color(0xFF666666);
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
-        trackHeight: dragging ? 6 : 3,
+        trackHeight: widePortrait ? (dragging ? 4 : 2) : (dragging ? 6 : 3),
         padding: EdgeInsets.zero,
-        activeTrackColor: colors.primary,
-        thumbColor: colors.primary,
-        inactiveTrackColor: Colors.white.withValues(alpha: .25),
-        secondaryActiveTrackColor: Colors.white.withValues(alpha: .4),
+        activeTrackColor: widePortrait ? hongguoProgress : colors.primary,
+        thumbColor: widePortrait ? hongguoProgress : colors.primary,
+        inactiveTrackColor: widePortrait
+            ? hongguoTrack
+            : Colors.white.withValues(alpha: .25),
+        secondaryActiveTrackColor: widePortrait
+            ? hongguoBuffered
+            : Colors.white.withValues(alpha: .4),
         thumbShape: RoundSliderThumbShape(
-          enabledThumbRadius: dragging ? 10 : 6,
+          enabledThumbRadius: widePortrait
+              ? (dragging ? 5 : 3)
+              : (dragging ? 10 : 6),
         ),
         overlayShape: SliderComponentShape.noOverlay,
         trackShape: const RoundedRectSliderTrackShape(),
