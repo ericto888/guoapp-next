@@ -570,7 +570,9 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
         ),
         FadePresence(
           duration: Motion.medium,
-          child: session.loading ? PlaybackLoading(session: session) : null,
+          child: full && session.loading
+              ? IgnorePointer(child: PlaybackLoading(session: session))
+              : null,
         ),
         FadePresence(
           duration: Motion.medium,
@@ -1831,6 +1833,10 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                                 ),
                               ),
                             if (current) ...[
+                              if (session.loading)
+                                IgnorePointer(
+                                  child: PlaybackLoading(session: session),
+                                ),
                               DanmakuOverlay(
                                 controller: session.danmaku,
                                 video: session.videoSize,
