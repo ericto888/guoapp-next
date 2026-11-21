@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../danmaku_controller.dart';
+import '../../danmaku_emoji.dart';
 import '../../danmaku_models.dart';
 import '../../danmaku_style.dart';
 import '../../playback_preferences.dart';
@@ -14,9 +15,9 @@ import '../../playback_preferences.dart';
 const danmakuMaxRows = 64;
 
 class DanmakuFlight {
-  const DanmakuFlight(this.item, this.text, this.lane, this.width);
+  const DanmakuFlight(this.item, this.segments, this.lane, this.width);
   final DanmakuItem item;
-  final String text;
+  final List<DanmakuSegment> segments;
   final int lane;
   final double width;
 }
@@ -25,7 +26,7 @@ List<DanmakuFlight> planDanmaku(
   List<DanmakuItem> items, {
   required double width,
   required int rows,
-  required double Function(String) measure,
+  required double Function(List<DanmakuSegment> segments) measure,
   int lifetimeMs = danmakuLifetimeMs,
 }) {
   if (!width.isFinite || width <= 0 || rows < 1) return const [];
@@ -51,10 +52,15 @@ List<DanmakuFlight> planDanmaku(
         24) {
       continue;
     }
-    final runes = item.text.runes;
-    final text =
-        String.fromCharCodes(runes.take(100)) + (runes.length > 100 ? '…' : '');
-    final size = measure(text).ceilToDouble() + 8;
+    final trimmed = truncateDanmakuSegments(
+      parseDanmakuSegments(item.text),
+      100,
+    );
+    if (trimmed.isEmpty) continue;
+    final segments = item.count > 1
+        ? [...trimmed, DanmakuSegment.text(' ×${item.count}')]
+        : trimmed;
+    final size = measure(segments).ceilToDouble() + 8;
     final lane = lanes.indexWhere((previous) {
       if (previous == null) return true;
       final gap = item.timeMs - previous.item.timeMs;
@@ -64,7 +70,7 @@ List<DanmakuFlight> planDanmaku(
           width - (width + size) * (lifetimeMs - gap) / lifetimeMs >= 24;
     });
     if (lane < 0) continue;
-    final flight = DanmakuFlight(item, text, lane, size);
+    final flight = DanmakuFlight(item, segments, lane, size);
     lanes[lane] = flight;
     flights.add(flight);
   }
@@ -114,15 +120,16 @@ class DanmakuOverlay extends StatelessWidget {
     required this.video,
     this.fit = VideoFit.auto,
     this.style = const DanmakuStyle(),
-    this.fillBounds = false,
+    this.topLimit,
+    this.videoOffsetY = 0,
   });
   final DanmakuController controller;
   final Size? video;
   final VideoFit fit;
   final DanmakuStyle style;
-  /// Uses the entire overlay box instead of constraining danmaku to the video
-  /// aspect ratio. This is useful for a dedicated black letterbox band.
-  final bool fillBounds;
+  final double? topLimit;
+  /// Vertical offset applied to the visible video's top edge.
+  final double videoOffsetY;
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
@@ -141,16 +148,29 @@ class DanmakuOverlay extends StatelessWidget {
             video ?? const Size(9, 16),
             MediaQuery.devicePixelRatioOf(context),
           );
-          final width = fillBounds ? box.width : math.min(box.width, shown.width);
-          final height = fillBounds ? box.height : math.min(box.height, shown.height);
+          final width = math.min(box.width, shown.width);
+          final videoHeight = math.min(box.height, shown.height);
+          final videoTop = ((box.height - videoHeight) / 2 + videoOffsetY)
+              .clamp(0.0, box.height);
+          final top = switch (topLimit) {
+            final limit? => math.min(limit, videoTop),
+            null => videoTop,
+          };
+          // With topLimit set, render only inside the upper letterbox band.
+          // Do not let danmaku spill over the video image.
+          final height = topLimit == null
+              ? videoHeight
+              : math.max(0.0, videoTop - top);
           final fontSize = (width < 600 ? 16.0 : 20.0) * style.scale;
           final scaler = MediaQuery.textScalerOf(context);
           final rowHeight = scaler.scale(fontSize) * 1.5;
           final rows = ((height * style.coverage.fraction - 8) / rowHeight)
               .floor()
               .clamp(0, danmakuMaxRows);
-          return Center(
-            child: SizedBox(
+          return Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              margin: EdgeInsets.only(top: top),
               width: width,
               height: height,
               child: ClipRect(
@@ -367,17 +387,12 @@ class _DanmakuLayerState extends State<_DanmakuLayer>
         width: widget.width,
         rows: widget.rows,
         lifetimeMs: _lifetimeMs,
-        measure: (text) {
-          final painter = TextPainter(
-            text: TextSpan(text: text, style: fill),
-            textDirection: TextDirection.ltr,
-            textScaler: widget.scaler,
-            maxLines: 1,
-          )..layout();
-          final measured = painter.width;
-          painter.dispose();
-          return measured;
-        },
+        measure: (segments) => measureDanmakuSegments(
+          segments,
+          fill,
+          textScaler: widget.scaler,
+          fontSize: widget.fontSize,
+        ),
       );
       _window = _windowAt(_clock.value);
       _drive();
@@ -411,10 +426,11 @@ class _DanmakuLayerState extends State<_DanmakuLayer>
                 origin: widget.width,
                 child: RepaintBoundary(
                   child: _DanmakuText(
-                    text: flight.text,
+                    segments: flight.segments,
                     style: fill,
                     outline: outline,
                     scaler: widget.scaler,
+                    fontSize: widget.fontSize,
                   ),
                 ),
               ),
@@ -527,41 +543,77 @@ class _RenderDanmakuSlide extends RenderProxyBox {
 
 class _DanmakuText extends StatelessWidget {
   const _DanmakuText({
-    required this.text,
+    required this.segments,
     required this.style,
     required this.outline,
     required this.scaler,
+    required this.fontSize,
   });
-  final String text;
+  final List<DanmakuSegment> segments;
   final TextStyle style;
   final TextStyle? outline;
   final TextScaler scaler;
+  final double fontSize;
 
-  @override
-  Widget build(BuildContext context) {
-    final label = Text(
-      text,
-      style: style,
+  InlineSpan? _span(
+    DanmakuSegment segment,
+    TextStyle textStyle, {
+    required bool withEmoji,
+  }) {
+    final text = segment.text;
+    if (text != null) {
+      if (text.isEmpty) return null;
+      return TextSpan(text: text, style: textStyle);
+    }
+    final extent = danmakuEmojiExtent(fontSize: fontSize, textScaler: scaler);
+    if (!withEmoji) {
+      return WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: SizedBox(width: extent, height: extent),
+      );
+    }
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: SizedBox(
+        width: extent,
+        height: extent,
+        child: Center(
+          child: Text(
+            segment.asset!,
+            style: textStyle,
+            textScaler: scaler,
+            maxLines: 1,
+            softWrap: false,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _rich(TextStyle textStyle, {required bool withEmoji}) {
+    final spans = <InlineSpan>[];
+    for (final segment in segments) {
+      final span = _span(segment, textStyle, withEmoji: withEmoji);
+      if (span != null) spans.add(span);
+    }
+    if (spans.isEmpty) return const SizedBox.shrink();
+    return Text.rich(
+      TextSpan(style: textStyle, children: spans),
       textScaler: scaler,
       textDirection: TextDirection.ltr,
       maxLines: 1,
       softWrap: false,
     );
-    final outline = this.outline;
-    if (outline == null) return label;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _rich(style, withEmoji: true);
+    final stroke = outline;
+    if (stroke == null) return label;
     return Stack(
       clipBehavior: Clip.none,
-      children: [
-        Text(
-          text,
-          style: outline,
-          textScaler: scaler,
-          textDirection: TextDirection.ltr,
-          maxLines: 1,
-          softWrap: false,
-        ),
-        label,
-      ],
+      children: [_rich(stroke, withEmoji: false), label],
     );
   }
 }
