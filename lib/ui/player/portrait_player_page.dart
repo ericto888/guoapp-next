@@ -753,7 +753,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         Positioned(
           left: 0,
           right: 0,
-          bottom: bottom + 116,
+          bottom: bottom + 88,
           child: FadePresence(
             scaleFrom: .9,
             child: _dragging
@@ -767,7 +767,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           key: const ValueKey('drama-info'),
           left: 16,
           right: 16,
-          bottom: bottom + 108,
+          bottom: bottom + 80,
           height: 124,
           child: _dragging
               ? const SizedBox.shrink()
@@ -777,7 +777,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           key: const ValueKey('progress'),
           left: 16,
           right: 16,
-          bottom: bottom + 68,
+          bottom: bottom + 40,
           height: 32,
           child: _chrome(_progress(context)),
         ),
@@ -785,7 +785,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           key: const ValueKey('episodes'),
           left: 16,
           right: 16,
-          bottom: bottom + 28,
+          bottom: bottom,
           height: 40,
           child: _chrome(_episodeStrip()),
         ),
