@@ -114,11 +114,15 @@ class DanmakuOverlay extends StatelessWidget {
     required this.video,
     this.fit = VideoFit.auto,
     this.style = const DanmakuStyle(),
+    this.fillBounds = false,
   });
   final DanmakuController controller;
   final Size? video;
   final VideoFit fit;
   final DanmakuStyle style;
+  /// Uses the entire overlay box instead of constraining danmaku to the video
+  /// aspect ratio. This is useful for a dedicated black letterbox band.
+  final bool fillBounds;
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
@@ -137,8 +141,8 @@ class DanmakuOverlay extends StatelessWidget {
             video ?? const Size(9, 16),
             MediaQuery.devicePixelRatioOf(context),
           );
-          final width = math.min(box.width, shown.width);
-          final height = math.min(box.height, shown.height);
+          final width = widget.fillBounds ? box.width : math.min(box.width, shown.width);
+          final height = widget.fillBounds ? box.height : math.min(box.height, shown.height);
           final fontSize = (width < 600 ? 16.0 : 20.0) * style.scale;
           final scaler = MediaQuery.textScalerOf(context);
           final rowHeight = scaler.scale(fontSize) * 1.5;
