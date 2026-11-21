@@ -328,7 +328,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
     }
     final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
     return _wideVideo && !portraitStyle
-        ? LandscapePlayerPage(
+        ? upstream.LandscapePlayerPage(
             store: widget.store,
             handle: widget.handle,
             onFullscreen: () => _padFullscreen.value = true,
