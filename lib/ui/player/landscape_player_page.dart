@@ -1828,7 +1828,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                     (topInset + topBarHeight) +
                     videoFooterHeight / 2;
                 final verticalAlignment =
-                    (2 * targetColumnCenter / maxHeight - 1).clamp(-1.0, 1.0);
+                    (2 * targetColumnCenter / maxHeight - 1).clamp(-1.0, 1.0).toDouble();
                 return Align(
                   alignment: Alignment(0, verticalAlignment),
                   child: Column(
