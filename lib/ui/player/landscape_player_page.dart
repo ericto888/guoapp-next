@@ -1948,7 +1948,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                                             ? null
                                             : (details) => _tapUp(
                                                 details,
-                                                constraints.pageWidth,
+                                                constraints.maxWidth,
                                                 false,
                                               ),
                                         onLongPressStart: session.locked
@@ -1966,7 +1966,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                             ],
                           ],
                         ),
-                      ),,
+                      ),
                     const SizedBox(height: 10),
                     _fullscreenPill(),
                   ],
