@@ -151,7 +151,8 @@ class DanmakuOverlay extends StatelessWidget {
           final width = math.min(box.width, shown.width);
           final videoHeight = math.min(box.height, shown.height);
           final videoTop = ((box.height - videoHeight) / 2 + videoOffsetY)
-              .clamp(0.0, box.height);
+              .clamp(0.0, box.height)
+              .toDouble();
           final top = switch (topLimit) {
             final limit? => math.min(limit, videoTop),
             null => videoTop,
