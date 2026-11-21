@@ -319,7 +319,8 @@ class _PlaybackPageState extends State<PlaybackPage> {
         onMiniWindow: mini,
       );
     }
-    return _wideVideo
+    final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
+    return _wideVideo && !portraitStyle
         ? LandscapePlayerPage(
             store: widget.store,
             handle: widget.handle,
