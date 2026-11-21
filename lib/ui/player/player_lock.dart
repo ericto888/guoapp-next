@@ -50,13 +50,14 @@ class PlayerLockOverlay extends StatefulWidget {
     required this.locked,
     required this.onUnlock,
     required this.onBlocked,
-    AlignmentGeometry? alignment,
-    List<AlignmentGeometry>? alignments,
+    this.alignment,
+    this.alignments = const [],
     this.padding = EdgeInsets.zero,
-  }) : alignments = alignments ?? [alignment ?? Alignment.center];
+  });
   final bool locked;
   final VoidCallback onUnlock;
   final VoidCallback onBlocked;
+  final AlignmentGeometry? alignment;
   final List<AlignmentGeometry> alignments;
   final EdgeInsetsGeometry padding;
 
@@ -123,7 +124,9 @@ class _PlayerLockOverlayState extends State<PlayerLockOverlay> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              for (final alignment in widget.alignments)
+              for (final alignment in widget.alignments.isEmpty
+                  ? [widget.alignment ?? Alignment.center]
+                  : widget.alignments)
                 Align(
                   alignment: alignment,
                   child: IgnorePointer(
