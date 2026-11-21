@@ -544,8 +544,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           if (!waiting)
             ClipRect(
               child: Transform.translate(
-                offset: session.videoSize case final video?
-                    when video.width >= video.height => const Offset(0, -32)
+                offset: session.videoSize != null &&
+                        session.videoSize!.width >= session.videoSize!.height
+                    ? const Offset(0, -32)
                     : Offset.zero,
                 child: AnimatedScale(
                   scale: _zoom,
