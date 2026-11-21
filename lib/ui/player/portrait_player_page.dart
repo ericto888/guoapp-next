@@ -543,17 +543,22 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         children: [
           if (!waiting)
             ClipRect(
-              child: AnimatedScale(
-                scale: _zoom,
-                duration: _pinching || _snapping
-                    ? Duration.zero
-                    : Motion.of(context, Motion.medium),
-                curve: Motion.standard,
-                child: PlayerVideo(
-                  key: ValueKey(player),
-                  handle: widget.handle,
-                  player: player,
-                  fit: session.videoFit,
+              child: Transform.translate(
+                offset: session.videoSize case final video?
+                    when video.width >= video.height => const Offset(0, -32)
+                    : Offset.zero,
+                child: AnimatedScale(
+                  scale: _zoom,
+                  duration: _pinching || _snapping
+                      ? Duration.zero
+                      : Motion.of(context, Motion.medium),
+                  curve: Motion.standard,
+                  child: PlayerVideo(
+                    key: ValueKey(player),
+                    handle: widget.handle,
+                    player: player,
+                    fit: session.videoFit,
+                  ),
                 ),
               ),
             ),
