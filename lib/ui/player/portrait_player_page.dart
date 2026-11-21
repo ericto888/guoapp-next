@@ -163,9 +163,15 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     });
   }
 
+  bool get _keepWidePortraitChrome =>
+      _session.wideVideoSource &&
+      widget.store.playbackPreferences.portraitStyleForWide &&
+      MediaQuery.orientationOf(context) == Orientation.portrait;
+
   bool get _chromeShown =>
       !_session.locked &&
-      (!_session.store.playbackPreferences.autoHideControls ||
+      (_keepWidePortraitChrome ||
+          !_session.store.playbackPreferences.autoHideControls ||
           !_idle ||
           _dragging ||
           _session.paused ||
@@ -563,6 +569,20 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 ),
               ),
             ),
+          if (current &&
+              session.videoSize != null &&
+              session.videoSize!.width >= session.videoSize!.height)
+            Positioned.fill(
+              child: DanmakuOverlay(
+                key: const ValueKey('danmaku-letterbox'),
+                controller: session.danmaku,
+                video: session.videoSize,
+                fit: session.videoFit,
+                style: session.danmakuStyle,
+                topLimit: MediaQuery.paddingOf(context).top + 56,
+                videoOffsetY: -32,
+              ),
+            ),
           FadePresence(
             duration: Motion.medium,
             child: waiting
@@ -725,24 +745,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 : null,
           ),
         ),
-        if (session.videoSize case final video? when video.width >= video.height)
-          Positioned(
-            key: const ValueKey('danmaku-top-band'),
-            left: 0,
-            right: 0,
-            top: padding.top + 62,
-            height: 92,
-            child: ColoredBox(
-              color: Colors.black.withValues(alpha: .92),
-              child: DanmakuOverlay(
-                key: const ValueKey('danmaku-top-band-overlay'),
-                controller: session.danmaku,
-                video: null,
-                fillBounds: true,
-                style: session.danmakuStyle,
-              ),
-            ),
-          ),
         Positioned(
           key: const ValueKey('drama-info'),
           left: 16,
