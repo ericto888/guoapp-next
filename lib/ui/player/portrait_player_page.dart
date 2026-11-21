@@ -713,11 +713,33 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         Positioned(
           key: const ValueKey('episodes'),
           left: 16,
-          right: 16,
+          right: widget.onFullscreen == null ? 16 : 68,
           bottom: bottom + 16,
           height: 44,
           child: _chrome(_episodeStrip()),
         ),
+        if (widget.onFullscreen != null)
+          Positioned(
+            key: const ValueKey('fullscreen'),
+            right: 16,
+            bottom: bottom + 16,
+            width: 44,
+            height: 44,
+            child: _chrome(
+              Material(
+                color: Colors.white.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(12),
+                child: IconButton(
+                  onPressed: widget.onFullscreen,
+                  tooltip: '横屏全屏',
+                  icon: const Icon(
+                    Icons.fullscreen_rounded,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
         Positioned(
           left: 0,
           right: 0,
