@@ -61,7 +61,9 @@ class PlaybackSession extends ChangeNotifier {
     _speed = preferences.speed;
     _quality = preferences.quality;
     _danmakuEnabled = preferences.danmaku;
-    _videoFit = preferences.videoFit;
+    _portraitVideoFit = preferences.portraitVideoFit;
+    _landscapeVideoFit = preferences.landscapeVideoFit;
+    _videoFit = preferences.portraitVideoFit;
     _unmutedVolume = store.playerVolume.clamp(1.0, 100.0);
     unawaited(_player.setVolume(_unmutedVolume));
     _loader = PlaybackLoader(repository);
@@ -103,7 +105,10 @@ class PlaybackSession extends ChangeNotifier {
     }
     _subscriptions.clear();
     final size = videoDisplaySize(player.state.videoParams);
-    if (size != null) _videoSize = size;
+    if (size != null) {
+      _videoSize = size;
+      _syncVideoFitForSize(size);
+    }
     _buffering(player.state.buffering);
     final stream = player.stream;
     _subscriptions.addAll([
@@ -135,6 +140,7 @@ class PlaybackSession extends ChangeNotifier {
         final size = videoDisplaySize(parameters);
         if (size == null || _closed) return;
         _videoSize = size;
+        _syncVideoFitForSize(size);
         _notify();
         unawaited(_logVideoOutput(parameters));
       }),
@@ -268,6 +274,8 @@ class PlaybackSession extends ChangeNotifier {
   bool _danmakuEnabled = true;
   Size? _videoSize;
   VideoFit _videoFit = VideoFit.auto;
+  VideoFit _portraitVideoFit = VideoFit.auto;
+  VideoFit _landscapeVideoFit = VideoFit.auto;
   double _resumePosition = 0;
   double _unmutedVolume = 100;
 
@@ -305,6 +313,8 @@ class PlaybackSession extends ChangeNotifier {
   };
   bool get aspectKnown => _videoSize != null;
   VideoFit get videoFit => _videoFit;
+  bool get wideVideoSource =>
+      _videoSize != null && _videoSize!.width >= _videoSize!.height;
   double get speed => _speed;
   DateTime? get sleepAt => _sleepAt;
   int get sleepMinutes => _sleepMinutes;
@@ -340,6 +350,8 @@ class PlaybackSession extends ChangeNotifier {
     quality: _quality,
     danmaku: _danmakuEnabled,
     videoFit: _videoFit,
+    portraitVideoFit: _portraitVideoFit,
+    landscapeVideoFit: _landscapeVideoFit,
     autoAdvance: true,
     preload: true,
   );
@@ -1527,18 +1539,31 @@ class PlaybackSession extends ChangeNotifier {
     if (!_boosting) await _setRate(value);
   }
 
+  void _syncVideoFitForSize(Size size) {
+    _videoFit = size.width >= size.height
+        ? _landscapeVideoFit
+        : _portraitVideoFit;
+  }
+
   Future<void> setVideoFit(VideoFit value) async {
     if (value == _videoFit) return;
     final previous = _videoFit;
+    final previousPortrait = _portraitVideoFit;
+    final previousLandscape = _landscapeVideoFit;
+    if (wideVideoSource) {
+      _landscapeVideoFit = value;
+    } else {
+      _portraitVideoFit = value;
+    }
     _videoFit = value;
     _notify();
     try {
       await _savePreferences(_preferences);
     } catch (_) {
-      if (_videoFit == value) {
-        _videoFit = previous;
-        _notify();
-      }
+      _portraitVideoFit = previousPortrait;
+      _landscapeVideoFit = previousLandscape;
+      if (_videoFit == value) _videoFit = previous;
+      _notify();
       rethrow;
     }
   }
