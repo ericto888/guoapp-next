@@ -106,7 +106,10 @@ class PlaybackPreferences {
     this.portraitStyleForWide = false,
     this.autoPictureInPicture = false,
     this.videoFit = VideoFit.auto,
-  });
+    VideoFit? portraitVideoFit,
+    VideoFit? landscapeVideoFit,
+  }) : portraitVideoFit = portraitVideoFit ?? videoFit,
+       landscapeVideoFit = landscapeVideoFit ?? videoFit;
 
   final double speed;
   final int quality;
@@ -138,7 +141,13 @@ class PlaybackPreferences {
   final bool hideSystemBars;
   final bool portraitStyleForWide;
   final bool autoPictureInPicture;
+  /// Legacy shared value retained for older settings payloads.
   final VideoFit videoFit;
+  final VideoFit portraitVideoFit;
+  final VideoFit landscapeVideoFit;
+
+  VideoFit videoFitFor({required bool wideSource}) =>
+      wideSource ? landscapeVideoFit : portraitVideoFit;
 
   bool preopens({required bool television}) => preopen ?? !television;
 
@@ -171,6 +180,8 @@ class PlaybackPreferences {
     bool? portraitStyleForWide,
     bool? autoPictureInPicture,
     VideoFit? videoFit,
+    VideoFit? portraitVideoFit,
+    VideoFit? landscapeVideoFit,
   }) => PlaybackPreferences(
     speed: speed ?? this.speed,
     quality: quality ?? this.quality,
@@ -200,6 +211,8 @@ class PlaybackPreferences {
     portraitStyleForWide: portraitStyleForWide ?? this.portraitStyleForWide,
     autoPictureInPicture: autoPictureInPicture ?? this.autoPictureInPicture,
     videoFit: videoFit ?? this.videoFit,
+    portraitVideoFit: portraitVideoFit ?? this.portraitVideoFit,
+    landscapeVideoFit: landscapeVideoFit ?? this.landscapeVideoFit,
   );
 
   Map<String, dynamic> toJson() => {
@@ -231,6 +244,8 @@ class PlaybackPreferences {
     'portraitStyleForWide': portraitStyleForWide,
     'autoPictureInPicture': autoPictureInPicture,
     'videoFit': videoFit.name,
+    'portraitVideoFit': portraitVideoFit.name,
+    'landscapeVideoFit': landscapeVideoFit.name,
   };
 
   factory PlaybackPreferences.fromJson(Map<String, dynamic> value) {
@@ -292,6 +307,14 @@ class PlaybackPreferences {
       portraitStyleForWide: value['portraitStyleForWide'] as bool? ?? false,
       autoPictureInPicture: value['autoPictureInPicture'] as bool? ?? false,
       videoFit: VideoFit.values.asNameMap()[value['videoFit']] ?? VideoFit.auto,
+      portraitVideoFit:
+          VideoFit.values.asNameMap()[value['portraitVideoFit']] ??
+          VideoFit.values.asNameMap()[value['videoFit']] ??
+          VideoFit.auto,
+      landscapeVideoFit:
+          VideoFit.values.asNameMap()[value['landscapeVideoFit']] ??
+          VideoFit.values.asNameMap()[value['videoFit']] ??
+          VideoFit.auto,
     );
   }
 }
