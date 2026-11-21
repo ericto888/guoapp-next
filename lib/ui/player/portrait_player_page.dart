@@ -131,9 +131,15 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         }
       }),
     );
-    for (final changes in [stream.duration, stream.buffering, stream.playing]) {
+    for (final changes in [stream.duration, stream.buffering]) {
       _subscriptions.add(changes.listen((_) => _refresh()));
     }
+    _subscriptions.add(
+      stream.playing.listen((playing) {
+        if (playing) _wake();
+        _refresh();
+      }),
+    );
   }
 
   void _changed() {
@@ -574,13 +580,15 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 : null,
           ),
           if (current) ...[
-            DanmakuOverlay(
-              key: const ValueKey('danmaku'),
-              controller: session.danmaku,
-              video: session.videoSize,
-              fit: session.videoFit,
-              style: session.danmakuStyle,
-            ),
+            if (session.videoSize == null ||
+                session.videoSize!.width < session.videoSize!.height)
+              DanmakuOverlay(
+                key: const ValueKey('danmaku'),
+                controller: session.danmaku,
+                video: session.videoSize,
+                fit: session.videoFit,
+                style: session.danmakuStyle,
+              ),
             SwipeControls(
               key: const ValueKey('gestures'),
               session: session,
@@ -711,11 +719,29 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 : null,
           ),
         ),
+        if (session.videoSize case final video? when video.width >= video.height)
+          Positioned(
+            key: const ValueKey('danmaku-top-band'),
+            left: 0,
+            right: 0,
+            top: padding.top + 62,
+            height: 92,
+            child: ColoredBox(
+              color: Colors.black.withValues(alpha: .92),
+              child: DanmakuOverlay(
+                key: const ValueKey('danmaku-top-band-overlay'),
+                controller: session.danmaku,
+                video: null,
+                fillBounds: true,
+                style: session.danmakuStyle,
+              ),
+            ),
+          ),
         Positioned(
           key: const ValueKey('drama-info'),
           left: 16,
           right: 16,
-          bottom: bottom + 100,
+          bottom: bottom + 132,
           height: 124,
           child: _chrome(_dramaInfo(context)),
         ),
@@ -723,35 +749,51 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           key: const ValueKey('progress'),
           left: 16,
           right: 16,
-          bottom: bottom + 60,
+          bottom: bottom + 92,
           height: 32,
           child: _chrome(_progress(context)),
         ),
         Positioned(
           key: const ValueKey('episodes'),
           left: 16,
-          right: widget.onFullscreen == null ? 16 : 68,
-          bottom: bottom + 16,
-          height: 44,
+          right: 16,
+          bottom: bottom + 52,
+          height: 40,
           child: _chrome(_episodeStrip()),
         ),
         if (widget.onFullscreen != null)
           Positioned(
             key: const ValueKey('fullscreen'),
-            right: 16,
-            bottom: bottom + 16,
-            width: 44,
-            height: 44,
+            left: 0,
+            right: 0,
+            bottom: bottom + 8,
+            height: 36,
             child: _chrome(
-              Material(
-                color: Colors.white.withValues(alpha: .14),
-                borderRadius: BorderRadius.circular(12),
-                child: IconButton(
-                  onPressed: widget.onFullscreen,
-                  tooltip: '横屏全屏',
-                  icon: const Icon(
-                    Icons.fullscreen_rounded,
-                    color: Colors.white,
+              Center(
+                child: Material(
+                  color: Colors.white.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: widget.onFullscreen,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.fullscreen_rounded, size: 17, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text(
+                            '全屏观看',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1038,6 +1080,38 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           drama: session.detail.drama,
           color: Colors.white,
           activeColor: Theme.of(context).colorScheme.primaryFixedDim,
+        ),
+        PopupMenuButton<double>(
+          tooltip: '播放倍速',
+          initialValue: session.speed,
+          onSelected: (speed) => unawaited(
+            session.setSpeed(speed).catchError((Object _) => _saveFailed()),
+          ),
+          itemBuilder: (context) => [
+            for (final speed in playbackSpeeds)
+              PopupMenuItem<double>(
+                value: speed,
+                child: Text('${speed}x'),
+              ),
+          ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.speed_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 3),
+                Text(
+                  '${session.speed}x',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
