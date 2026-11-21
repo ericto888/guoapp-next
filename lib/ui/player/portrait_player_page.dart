@@ -36,10 +36,12 @@ class PortraitPlayerPage extends StatefulWidget {
     super.key,
     required this.store,
     required this.handle,
+    this.onFullscreen,
     this.onMiniWindow,
   });
   final LocalStore store;
   final PlaybackHandle handle;
+  final VoidCallback? onFullscreen;
   final VoidCallback? onMiniWindow;
 
   @override
@@ -57,6 +59,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   bool _edgeHinted = false;
   bool _holding = false;
   bool _overMask = false;
+  bool _descExpanded = false;
   int _heldIndex = -1;
   bool _dragging = false;
   double? _seekValue;
@@ -128,9 +131,15 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         }
       }),
     );
-    for (final changes in [stream.duration, stream.buffering, stream.playing]) {
+    for (final changes in [stream.duration, stream.buffering]) {
       _subscriptions.add(changes.listen((_) => _refresh()));
     }
+    _subscriptions.add(
+      stream.playing.listen((playing) {
+        if (playing) _wake();
+        _refresh();
+      }),
+    );
   }
 
   void _changed() {
@@ -154,9 +163,15 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     });
   }
 
+  bool get _keepWidePortraitChrome =>
+      _session.wideVideoSource &&
+      widget.store.playbackPreferences.portraitStyleForWide &&
+      MediaQuery.orientationOf(context) == Orientation.portrait;
+
   bool get _chromeShown =>
       !_session.locked &&
-      (!_session.store.playbackPreferences.autoHideControls ||
+      (_keepWidePortraitChrome ||
+          !_session.store.playbackPreferences.autoHideControls ||
           !_idle ||
           _dragging ||
           _session.paused ||
@@ -423,6 +438,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     context,
     (_) => _EpisodeSheet(
       session: _session,
+      onSeasons: () => unawaited(_openSeasons()),
       canDownload:
           AppScope.of(context).repository.supportsDownloads &&
           widget.store.canDownload,
@@ -433,6 +449,22 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       ),
     ),
   );
+
+  Future<void> _openSeasons() async {
+    DramaSeason? picked;
+    await showPlayerSheet(
+      context,
+      (_) => SeasonSheet(session: _session, onSeason: (season) => picked = season),
+    );
+    if (!mounted) return;
+    if (picked case final season?) {
+      if (!await _session.playSeason(season) && mounted) {
+        _say('${season.label}切换失败，请稍后重试');
+      }
+    } else {
+      await _openEpisodes();
+    }
+  }
 
   void _saveFailed() {
     if (!mounted) return;
@@ -517,18 +549,38 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         children: [
           if (!waiting)
             ClipRect(
-              child: AnimatedScale(
-                scale: _zoom,
-                duration: _pinching || _snapping
-                    ? Duration.zero
-                    : Motion.of(context, Motion.medium),
-                curve: Motion.standard,
-                child: PlayerVideo(
-                  key: ValueKey(player),
-                  handle: widget.handle,
-                  player: player,
-                  fit: session.videoFit,
+              child: Transform.translate(
+                offset: session.videoSize != null &&
+                        session.videoSize!.width >= session.videoSize!.height
+                    ? const Offset(0, -40)
+                    : Offset.zero,
+                child: AnimatedScale(
+                  scale: _zoom,
+                  duration: _pinching || _snapping
+                      ? Duration.zero
+                      : Motion.of(context, Motion.medium),
+                  curve: Motion.standard,
+                  child: PlayerVideo(
+                    key: ValueKey(player),
+                    handle: widget.handle,
+                    player: player,
+                    fit: session.videoFit,
+                  ),
                 ),
+              ),
+            ),
+          if (current &&
+              session.videoSize != null &&
+              session.videoSize!.width >= session.videoSize!.height)
+            Positioned.fill(
+              child: DanmakuOverlay(
+                key: const ValueKey('danmaku-letterbox'),
+                controller: session.danmaku,
+                video: session.videoSize,
+                fit: session.videoFit,
+                style: session.danmakuStyle,
+                topLimit: MediaQuery.paddingOf(context).top + 56,
+                videoOffsetY: -40,
               ),
             ),
           FadePresence(
@@ -554,13 +606,15 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 : null,
           ),
           if (current) ...[
-            DanmakuOverlay(
-              key: const ValueKey('danmaku'),
-              controller: session.danmaku,
-              video: session.videoSize,
-              fit: session.videoFit,
-              style: session.danmakuStyle,
-            ),
+            if (session.videoSize == null ||
+                session.videoSize!.width < session.videoSize!.height)
+              DanmakuOverlay(
+                key: const ValueKey('danmaku'),
+                controller: session.danmaku,
+                video: session.videoSize,
+                fit: session.videoFit,
+                style: session.danmakuStyle,
+              ),
             SwipeControls(
               key: const ValueKey('gestures'),
               session: session,
@@ -595,6 +649,24 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     );
     final bottom = padding.bottom;
     final locked = session.boostLocked;
+    final widePortrait = _keepWidePortraitChrome;
+    final video = session.videoSize;
+    final screen = MediaQuery.sizeOf(context);
+    final fullscreenTop = widePortrait && widget.onFullscreen != null && video != null
+        ? (() {
+            final fitted = session.videoFit.size(
+              screen,
+              video,
+              MediaQuery.devicePixelRatioOf(context),
+            );
+            final videoBottom = (screen.height + fitted.height) / 2 - 32;
+            // 按视频实际显示区域放置，并确保按钮位于简介卡片上方。
+            final introTop = screen.height - bottom - 232;
+            return (videoBottom + 8)
+                .clamp(0.0, math.max(0.0, introTop - 44))
+                .toDouble();
+          })()
+        : null;
     _syncSystemBars();
     return Stack(
       fit: StackFit.expand,
@@ -681,7 +753,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         Positioned(
           left: 0,
           right: 0,
-          bottom: bottom + 140,
+          bottom: bottom + 88,
           child: FadePresence(
             scaleFrom: .9,
             child: _dragging
@@ -692,10 +764,20 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           ),
         ),
         Positioned(
+          key: const ValueKey('drama-info'),
+          left: 16,
+          right: 16,
+          bottom: bottom + 80,
+          height: 124,
+          child: _dragging
+              ? const SizedBox.shrink()
+              : _chrome(_dramaInfo(context)),
+        ),
+        Positioned(
           key: const ValueKey('progress'),
           left: 16,
           right: 16,
-          bottom: bottom + 60,
+          bottom: bottom + 40,
           height: 32,
           child: _chrome(_progress(context)),
         ),
@@ -703,10 +785,49 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           key: const ValueKey('episodes'),
           left: 16,
           right: 16,
-          bottom: bottom + 16,
-          height: 44,
+          bottom: bottom,
+          height: 40,
           child: _chrome(_episodeStrip()),
         ),
+        if (widget.onFullscreen != null)
+          Positioned(
+            key: const ValueKey('fullscreen'),
+            left: 0,
+            right: 0,
+            top: fullscreenTop,
+            bottom: fullscreenTop == null ? bottom + 8 : null,
+            height: 36,
+            child: _chrome(
+              Center(
+                child: Material(
+                  color: Colors.white.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: widget.onFullscreen,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.fullscreen_rounded, size: 17, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text(
+                            '全屏观看',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         Positioned(
           left: 0,
           right: 0,
@@ -725,7 +846,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             height: bottom + _maskHeight,
             child: IgnorePointer(
               child: ColoredBox(
-                color: Colors.black,
+                color: const Color(0xFF1B1B1B),
                 child: Padding(
                   padding: EdgeInsets.only(bottom: bottom),
                   child: Row(
@@ -863,6 +984,85 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     );
   }
 
+  Widget _dramaInfo(BuildContext context) {
+    final session = _session;
+    final drama = session.detail.drama;
+    final description = drama.description.trim();
+    final meta = [
+      SourceSite.byId(drama.source).name,
+      if (drama.releaseLabel != '状态未知') drama.releaseLabel,
+      if (drama.category.isNotEmpty) drama.category,
+    ];
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: SingleChildScrollView(
+        reverse: true,
+        padding: const EdgeInsets.only(right: 4, bottom: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              drama.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                height: 1.3,
+                shadows: [Shadow(color: Color(0x88000000), blurRadius: 4)],
+              ),
+            ),
+            const SizedBox(height: 4),
+            if (meta.isNotEmpty)
+              Text(
+                meta.join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: .72),
+                ),
+              ),
+            const SizedBox(height: 5),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    '第 ${session.episode.number} 集  |  ${description.isEmpty ? '暂无简介' : description}',
+                    maxLines: _descExpanded ? null : 2,
+                    overflow: _descExpanded ? null : TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: description.isEmpty
+                          ? Colors.white.withValues(alpha: .65)
+                          : Colors.white.withValues(alpha: .92),
+                    ),
+                  ),
+                ),
+                if (description.length > 20)
+                  TextButton(
+                    onPressed: () => setState(() => _descExpanded = !_descExpanded),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.only(left: 6),
+                      minimumSize: const Size(0, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(_descExpanded ? '收起' : '展开'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _header() {
     final session = _session;
     const shadow = [Shadow(color: Color(0x66000000), blurRadius: 2)];
@@ -887,7 +1087,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   shadows: shadow,
                 ),
@@ -909,6 +1109,38 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           drama: session.detail.drama,
           color: Colors.white,
           activeColor: Theme.of(context).colorScheme.primaryFixedDim,
+        ),
+        PopupMenuButton<double>(
+          tooltip: '播放倍速',
+          initialValue: session.speed,
+          onSelected: (speed) => unawaited(
+            session.setSpeed(speed).catchError((Object _) => _saveFailed()),
+          ),
+          itemBuilder: (context) => [
+            for (final speed in playbackSpeeds)
+              PopupMenuItem<double>(
+                value: speed,
+                child: Text('${speed}x'),
+              ),
+          ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.speed_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 3),
+                Text(
+                  '${session.speed}x',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -957,16 +1189,27 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         .clamp(0.0, max);
     final dragging = _dragging;
     final colors = Theme.of(context).colorScheme;
+    final widePortrait = _keepWidePortraitChrome;
+    // 横片竖持采用红果风格的深色细进度条；原生竖片保留主题色样式。
+    const hongguoProgress = Color(0xFFC83A36);
+    const hongguoTrack = Color(0xFF383838);
+    const hongguoBuffered = Color(0xFF666666);
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
-        trackHeight: dragging ? 6 : 3,
+        trackHeight: widePortrait ? (dragging ? 4 : 2) : (dragging ? 6 : 3),
         padding: EdgeInsets.zero,
-        activeTrackColor: colors.primary,
-        thumbColor: colors.primary,
-        inactiveTrackColor: Colors.white.withValues(alpha: .25),
-        secondaryActiveTrackColor: Colors.white.withValues(alpha: .4),
+        activeTrackColor: widePortrait ? hongguoProgress : colors.primary,
+        thumbColor: widePortrait ? hongguoProgress : colors.primary,
+        inactiveTrackColor: widePortrait
+            ? hongguoTrack
+            : Colors.white.withValues(alpha: .25),
+        secondaryActiveTrackColor: widePortrait
+            ? hongguoBuffered
+            : Colors.white.withValues(alpha: .4),
         thumbShape: RoundSliderThumbShape(
-          enabledThumbRadius: dragging ? 10 : 6,
+          enabledThumbRadius: widePortrait
+              ? (dragging ? 5 : 3)
+              : (dragging ? 10 : 6),
         ),
         overlayShape: SliderComponentShape.noOverlay,
         trackShape: const RoundedRectSliderTrackShape(),
@@ -1129,10 +1372,12 @@ class _Shade extends StatelessWidget {
 class _EpisodeSheet extends StatefulWidget {
   const _EpisodeSheet({
     required this.session,
+    required this.onSeasons,
     required this.canDownload,
     required this.onDownload,
   });
   final PlaybackSession session;
+  final VoidCallback onSeasons;
   final bool canDownload;
   final ValueChanged<List<int>> onDownload;
 
@@ -1229,6 +1474,46 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
             child: ListenableBuilder(
               listenable: _session,
               builder: (context, _) => EpisodeGrid(
+                header: !_selecting && _session.detail.seasons.isNotEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: Material(
+                          color: colors.surfaceContainerHighest.withValues(alpha: .55),
+                          borderRadius: BorderRadius.circular(12),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () {
+                              Navigator.pop(context);
+                              widget.onSeasons();
+                            },
+                            child: SizedBox(
+                              height: 44,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.layers_rounded, size: 18, color: colors.primary),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _session.detail.seasons
+                                              .where((season) => season.drama.id == _session.detail.drama.id)
+                                              .map((season) => season.label)
+                                              .firstOrNull ??
+                                          '系列多季',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                    ),
+                                    const Spacer(),
+                                    Text('共 ${_session.detail.seasons.length} 季', style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant)),
+                                    const SizedBox(width: 6),
+                                    Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : null,
                 episodes: episodes,
                 current: _session.index,
                 selecting: _selecting,
@@ -1246,6 +1531,85 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class SeasonSheet extends StatelessWidget {
+  const SeasonSheet({super.key, required this.session, required this.onSeason});
+  final PlaybackSession session;
+  final ValueChanged<DramaSeason> onSeason;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final seasons = session.detail.seasons;
+    final playing = session.detail.drama.id;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SheetHeader(
+          children: [
+            const Expanded(child: Text('选择季', style: sheetTitle)),
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close_rounded),
+              tooltip: '关闭',
+            ),
+          ],
+        ),
+        Flexible(
+          child: SafeArea(
+            top: false,
+            child: GridView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              itemCount: seasons.length,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 120,
+                mainAxisExtent: 48,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemBuilder: (context, index) {
+                final season = seasons[index];
+                final current = season.drama.id == playing;
+                return Material(
+                  color: current
+                      ? colors.primaryContainer
+                      : colors.surfaceContainerHighest.withValues(alpha: .55),
+                  borderRadius: BorderRadius.circular(14),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: current
+                        ? null
+                        : () {
+                            onSeason(season);
+                            Navigator.pop(context);
+                          },
+                    child: Center(
+                      child: Text(
+                        season.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: current
+                              ? colors.onPrimaryContainer
+                              : colors.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

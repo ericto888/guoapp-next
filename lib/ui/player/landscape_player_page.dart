@@ -1801,183 +1801,153 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
         : index == session.standbyIndex
         ? session.standby
         : null;
+
+    // 按上游竖持播放器的结构：固定 16:9 视频在上方，
+    // 信息流/简介在视频下方，进度条固定在信息流底部。
     return ColoredBox(
       color: Colors.black,
-      child: Column(
-        children: [
-          Expanded(
-            flex: 3,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // 用显式宽度算 16:9 高度：AspectRatio 单独放在 Column
-                // (mainAxisSize: min) 里会被算成 0 高度，所以外面套 SizedBox。
-                final maxWidth = constraints.maxWidth;
-                final maxHeight = constraints.maxHeight;
-                final videoHeight = math.min(
-                  maxWidth * 9 / 16,
-                  maxHeight * .78,
-                );
-                // 将视频画面中心对齐手机屏幕中心。PageView 位于顶部栏
-                // 与底部选集栏之间，因此不能直接使用视频区自身的 Center。
-                final screenHeight = MediaQuery.sizeOf(context).height;
-                final topInset = MediaQuery.paddingOf(context).top;
-                const topBarHeight = 52.0;
-                const videoFooterHeight = 44.0; // 间距 +「全屏观看」入口
-                final targetColumnCenter =
-                    screenHeight / 2 -
-                    (topInset + topBarHeight) +
-                    videoFooterHeight / 2;
-                final verticalAlignment =
-                    (2 * targetColumnCenter / maxHeight - 1).clamp(-1.0, 1.0).toDouble();
-                return Align(
-                  alignment: Alignment(0, verticalAlignment),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: maxWidth,
-                        height: videoHeight,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (player != null)
-                              _heldVideoSurface(
-                                session,
-                                player,
-                                Size(maxWidth, videoHeight),
-                              )
-                            else
-                              IgnorePointer(
-                                child: Center(
-                                  child: Text(
-                                    '第 ${session.detail.episodes[index].number} 集',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: .72,
-                                      ),
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            if (current) ...[
-                              DanmakuOverlay(
-                                controller: session.danmaku,
-                                video: session.videoSize,
-                                fit: session.videoFit,
-                                style: session.danmakuStyle,
-                              ),
-                              IgnorePointer(
-                                // 外层 Stack 是 StackFit.expand，直接放 Container 会被
-                                // 紧约束拉成整个视频大小（圆形遮罩巨大），用 Center 撑住。
-                                child: Center(
-                                  child: AnimatedScale(
-                                    duration: Motion.short,
-                                    scale: session.paused ? 1 : .8,
-                                    child: AnimatedOpacity(
-                                      duration: Motion.short,
-                                      opacity: session.paused ? 1 : 0,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(14),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(
-                                            alpha: .45,
-                                          ),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.play_arrow_rounded,
-                                          color: Colors.white,
-                                          size: 48,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SwipeControls(
-                                session: session,
-                                enabled: false,
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) =>
-                                      GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTapUp: session.locked
-                                            ? null
-                                            : (details) => _tapUp(
-                                                details,
-                                                constraints.maxWidth,
-                                                false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final videoHeight = constraints.maxWidth * 9 / 16;
+          return Column(
+            children: [
+              SizedBox(
+                                      width: constraints.maxWidth,
+                                      height: videoHeight,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          if (player != null)
+                                            _heldVideoSurface(
+                                              session,
+                                              player,
+                                              Size(constraints.maxWidth, videoHeight),
+                                            )
+                                          else
+                                            IgnorePointer(
+                                              child: Center(
+                                                child: Text(
+                                                  '第 ${session.detail.episodes[index].number} 集',
+                                                  style: TextStyle(
+                                                    color: Colors.white.withValues(
+                                                      alpha: .72,
+                                                    ),
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
                                               ),
-                                        onLongPressStart: session.locked
-                                            ? null
-                                            : (_) => _pressStart(),
-                                        onLongPressEnd: session.locked
-                                            ? null
-                                            : (_) => _pressEnd(),
-                                        onLongPressCancel: session.locked
-                                            ? null
-                                            : _pressEnd,
+                                            ),
+                                          if (current) ...[
+                                            DanmakuOverlay(
+                                              controller: session.danmaku,
+                                              video: session.videoSize,
+                                              fit: session.videoFit,
+                                              style: session.danmakuStyle,
+                                            ),
+                                            IgnorePointer(
+                                              // 外层 Stack 是 StackFit.expand，直接放 Container 会被
+                                              // 紧约束拉成整个视频大小（圆形遮罩巨大），用 Center 撑住。
+                                              child: Center(
+                                                child: AnimatedScale(
+                                                  duration: Motion.short,
+                                                  scale: session.paused ? 1 : .8,
+                                                  child: AnimatedOpacity(
+                                                    duration: Motion.short,
+                                                    opacity: session.paused ? 1 : 0,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(14),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black.withValues(
+                                                          alpha: .45,
+                                                        ),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.play_arrow_rounded,
+                                                        color: Colors.white,
+                                                        size: 48,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            SwipeControls(
+                                              session: session,
+                                              enabled: false,
+                                              child: LayoutBuilder(
+                                                builder: (context, constraints) =>
+                                                    GestureDetector(
+                                                      behavior: HitTestBehavior.opaque,
+                                                      onTapUp: session.locked
+                                                          ? null
+                                                          : (details) => _tapUp(
+                                                              details,
+                                                              constraints.maxWidth,
+                                                              false,
+                                                            ),
+                                                      onLongPressStart: session.locked
+                                                          ? null
+                                                          : (_) => _pressStart(),
+                                                      onLongPressEnd: session.locked
+                                                          ? null
+                                                          : (_) => _pressEnd(),
+                                                      onLongPressCancel: session.locked
+                                                          ? null
+                                                          : _pressEnd,
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
-                                ),
+                                    ),
+              const SizedBox(height: 10),
+              _fullscreenPill(),
+              Expanded(child: _feed(context)),
+              // 底部进度条：所有页都占位（非当前页只隐藏不裁剪布局）。
+                        // 若用 if (current) 条件渲染，滑动换集完成瞬间进度条突然插入，
+                        // Column 里 Expanded 重新分配高度，整页内容会跳动一下。
+                        AnimatedOpacity(
+                          opacity: current && !_scrolling ? 1 : 0,
+                          duration: Motion.short,
+                          child: IgnorePointer(
+                            ignoring: !current,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+                              child: PlaybackProgressBuilder(
+                                player: _session.player,
+                                builder: (context) {
+                                  // 红果样式：细白线。播放时整体压低对比度，暂停时高亮，
+                                  // 暂停态圆点略大，方便拖动。
+                                  final paused = _session.paused;
+                                  return SizedBox(
+                                    height: 22,
+                                    child: _progressBar(
+                                      context,
+                                      thumb: paused ? 4 : 3,
+                                      track: 2,
+                                      active: Colors.white.withValues(alpha: paused ? 1 : .4),
+                                      inactive: Colors.white.withValues(
+                                        alpha: paused ? .32 : .16,
+                                      ),
+                                      buffered: Colors.white.withValues(
+                                        alpha: paused ? .45 : .25,
+                                      ),
+                                      thumbColor: Colors.white.withValues(
+                                        alpha: paused ? 1 : .55,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                            ],
-                          ],
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      _fullscreenPill(),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          // _feed 内部是「全 Positioned 子节点」的 Stack，必须由 Expanded
-          // 给出有限高度约束；否则 Column 传无限高度 → Stack 尺寸无穷大，
-          // 把上面的视频区挤成 0 高度（视频不显示）。
-          Expanded(flex: 2, child: _feed(context)),
-          // 底部进度条：所有页都占位（非当前页只隐藏不裁剪布局）。
-          // 若用 if (current) 条件渲染，滑动换集完成瞬间进度条突然插入，
-          // Column 里 Expanded 重新分配高度，整页内容会跳动一下。
-          AnimatedOpacity(
-            opacity: current && !_scrolling ? 1 : 0,
-            duration: Motion.short,
-            child: IgnorePointer(
-              ignoring: !current,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
-                child: PlaybackProgressBuilder(
-                  player: _session.player,
-                  builder: (context) {
-                    // 红果样式：细白线。播放时整体压低对比度，暂停时高亮，
-                    // 暂停态圆点略大，方便拖动。
-                    final paused = _session.paused;
-                    return SizedBox(
-                      height: 22,
-                      child: _progressBar(
-                        context,
-                        thumb: paused ? 4 : 3,
-                        track: 2,
-                        active: Colors.white.withValues(alpha: paused ? 1 : .4),
-                        inactive: Colors.white.withValues(
-                          alpha: paused ? .32 : .16,
-                        ),
-                        buffered: Colors.white.withValues(
-                          alpha: paused ? .45 : .25,
-                        ),
-                        thumbColor: Colors.white.withValues(
-                          alpha: paused ? 1 : .55,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

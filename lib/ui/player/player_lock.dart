@@ -50,14 +50,16 @@ class PlayerLockOverlay extends StatefulWidget {
     required this.locked,
     required this.onUnlock,
     required this.onBlocked,
-    required this.alignment,
-    required this.padding,
+    this.alignment,
+    this.alignments = const [],
+    this.padding = EdgeInsets.zero,
   });
   final bool locked;
   final VoidCallback onUnlock;
   final VoidCallback onBlocked;
-  final Alignment alignment;
-  final EdgeInsets padding;
+  final AlignmentGeometry? alignment;
+  final List<AlignmentGeometry> alignments;
+  final EdgeInsetsGeometry padding;
 
   @override
   State<PlayerLockOverlay> createState() => _PlayerLockOverlayState();
@@ -119,20 +121,28 @@ class _PlayerLockOverlayState extends State<PlayerLockOverlay> {
         GestureDetector(behavior: HitTestBehavior.opaque, onTap: _tap),
         Padding(
           padding: widget.padding,
-          child: Align(
-            alignment: widget.alignment,
-            child: IgnorePointer(
-              ignoring: !_shown,
-              child: AnimatedOpacity(
-                opacity: _shown ? 1 : 0,
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                child: PlayerLockButton(
-                  locked: true,
-                  onPressed: widget.onUnlock,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final alignment in widget.alignments.isEmpty
+                  ? [widget.alignment ?? Alignment.center]
+                  : widget.alignments)
+                Align(
+                  alignment: alignment,
+                  child: IgnorePointer(
+                    ignoring: !_shown,
+                    child: AnimatedOpacity(
+                      opacity: _shown ? 1 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      child: PlayerLockButton(
+                        locked: true,
+                        onPressed: widget.onUnlock,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+            ],
           ),
         ),
       ],

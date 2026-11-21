@@ -95,6 +95,28 @@ void main() {
     );
   });
 
+  test('legacy video fit migrates to both source orientations', () {
+    final preferences = PlaybackPreferences.fromJson(const {
+      'videoFit': 'crop',
+    });
+    expect(preferences.portraitVideoFit, VideoFit.crop);
+    expect(preferences.landscapeVideoFit, VideoFit.crop);
+  });
+
+  test('portrait and landscape source fits are saved independently', () {
+    const preferences = PlaybackPreferences(
+      portraitVideoFit: VideoFit.crop,
+      landscapeVideoFit: VideoFit.fitWidth,
+    );
+    final restored = PlaybackPreferences.fromJson(preferences.toJson());
+    expect(restored.videoFitFor(wideSource: false), VideoFit.crop);
+    expect(restored.videoFitFor(wideSource: true), VideoFit.fitWidth);
+    expect(
+      restored.copyWith(portraitVideoFit: VideoFit.auto).landscapeVideoFit,
+      VideoFit.fitWidth,
+    );
+  });
+
   test('video fit sizes a 16:9 video inside a 400x400 box', () {
     const box = Size(400, 400);
     const video = Size(1920, 1080);

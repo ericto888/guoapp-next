@@ -9,7 +9,8 @@ import '../../local_store.dart';
 import '../../picture_in_picture.dart';
 import '../../playback_session.dart';
 import '../app_scope.dart';
-import 'landscape_player_page.dart';
+import 'upstream_landscape_player_page.dart' as upstream;
+import 'landscape_player_page.dart' as custom_landscape;
 import 'mini_player.dart';
 import 'playback_handle.dart';
 import 'player_page.dart';
@@ -48,6 +49,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
   MediaQueryData? _media;
   bool _shown = false;
   bool _locked = false;
+  Orientation? _lastOrientation;
   Player? _bound;
   StreamSubscription<bool>? _playing;
 
@@ -60,8 +62,28 @@ class _PlaybackPageState extends State<PlaybackPage> {
     currentWide: _wideVideo,
   );
 
+  bool _wideAutoRotationApplied = false;
+
   bool get _television =>
       AppScope.formFactorOf(context) == FormFactor.television;
+
+  /// 竖持横片模式交给系统方向传感器：用户物理横持时直接切换到
+  /// 自定义横屏真全屏页面，不再要求先点“全屏观看”。
+  void _syncWideAutoRotation({bool? wide}) {
+    if (!mounted) return;
+    final enabled =
+        !desktopPlatform &&
+        AppScope.formFactorOf(context) == FormFactor.phone &&
+        (wide ?? _wideVideo) &&
+        widget.store.playbackPreferences.portraitStyleForWide;
+    if (enabled == _wideAutoRotationApplied) return;
+    _wideAutoRotationApplied = enabled;
+    if (enabled) {
+      unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
+    } else {
+      unawaited(AppDevice.releaseOrientation());
+    }
+  }
 
   @override
   void initState() {
@@ -72,7 +94,10 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _pip.addListener(_pipChanged);
     _pip.onAction = _action;
     _bind();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sync();
+      _syncWideAutoRotation();
+    });
   }
 
   @override
@@ -84,6 +109,10 @@ class _PlaybackPageState extends State<PlaybackPage> {
     if (_pip.window) unawaited(_restore());
     unawaited(_playing?.cancel());
     _pageScope.dispose();
+    if (_wideAutoRotationApplied) {
+      _wideAutoRotationApplied = false;
+      unawaited(AppDevice.releaseOrientation());
+    }
     if (_padFullscreen.value) _applyPadFullscreen(false);
     _padFullscreen.dispose();
     unawaited(AppDevice.resetBrightness());
@@ -98,6 +127,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
     final wide = _measure();
     final swapped = !identical(previous, _bound);
     if (wide != _wideVideo || swapped) setState(() => _wideVideo = wide);
+    _syncWideAutoRotation(wide: wide);
     if (_session.locked != _locked) {
       _locked = _session.locked;
       _holdOrientation(_locked);
@@ -121,6 +151,41 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _bound = player;
     unawaited(_playing?.cancel());
     _playing = player.stream.playing.listen((_) => _sync());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final orientation = MediaQuery.orientationOf(context);
+    final previous = _lastOrientation;
+    _lastOrientation = orientation;
+    // 从手动全屏横屏退出并回到竖屏后，重新交还方向控制权给系统传感器。
+    // _wideAutoRotationApplied 在进入全屏前已经为 true，因此不能依赖
+    // _syncWideAutoRotation 的状态去重；这里必须显式重新应用 auto。
+    if (previous == Orientation.landscape &&
+        orientation == Orientation.portrait &&
+        !desktopPlatform &&
+        AppScope.formFactorOf(context) == FormFactor.phone &&
+        _wideVideo &&
+        widget.store.playbackPreferences.portraitStyleForWide) {
+      unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
+    }
+    if (previous == Orientation.portrait &&
+        orientation == Orientation.landscape &&
+        _wideVideo &&
+        widget.store.playbackPreferences.portraitStyleForWide &&
+        !_session.paused &&
+        !_session.player.state.playing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            MediaQuery.orientationOf(context) != Orientation.landscape ||
+            _session.paused ||
+            _session.player.state.playing) {
+          return;
+        }
+        unawaited(_session.player.play());
+      });
+    }
   }
 
   void _sync() {
@@ -261,14 +326,27 @@ class _PlaybackPageState extends State<PlaybackPage> {
   Widget _page(BuildContext context) {
     final form = AppScope.formFactorOf(context);
     final mini = _pip.available ? () => unawaited(_enterMini()) : null;
+    final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
     if (desktopPlatform) {
       final size = MediaQuery.sizeOf(context);
       return switch (form) {
-        FormFactor.phone when _wideVideo => LandscapePlayerPage(
-          store: widget.store,
-          handle: widget.handle,
-          onMiniWindow: mini,
-        ),
+        FormFactor.phone
+            when _wideVideo &&
+                portraitStyle &&
+                MediaQuery.orientationOf(context) == Orientation.landscape =>
+          custom_landscape.LandscapePlayerPage(
+            store: widget.store,
+            handle: widget.handle,
+            onFullscreen: () {},
+            onMiniWindow: mini,
+          ),
+        FormFactor.phone
+            when _wideVideo && !portraitStyle =>
+          upstream.LandscapePlayerPage(
+            store: widget.store,
+            handle: widget.handle,
+            onMiniWindow: mini,
+          ),
         FormFactor.phone => PortraitPlayerPage(
           store: widget.store,
           handle: widget.handle,
@@ -290,14 +368,31 @@ class _PlaybackPageState extends State<PlaybackPage> {
     }
     return switch (form) {
       FormFactor.pad || FormFactor.window => _padPage(context, mini),
-      FormFactor.phone when _wideVideo => LandscapePlayerPage(
-        store: widget.store,
-        handle: widget.handle,
-        onMiniWindow: mini,
-      ),
+      FormFactor.phone
+          when _wideVideo &&
+              portraitStyle &&
+              MediaQuery.orientationOf(context) == Orientation.landscape =>
+        custom_landscape.LandscapePlayerPage(
+          store: widget.store,
+          handle: widget.handle,
+          onFullscreen: () {},
+          onMiniWindow: mini,
+        ),
+      FormFactor.phone
+          when _wideVideo && !portraitStyle =>
+        upstream.LandscapePlayerPage(
+          store: widget.store,
+          handle: widget.handle,
+          onMiniWindow: mini,
+        ),
       FormFactor.phone => PortraitPlayerPage(
         store: widget.store,
         handle: widget.handle,
+        onFullscreen: _wideVideo
+            ? () => unawaited(
+                AppDevice.setPlayerOrientation(PlayerOrientation.landscape),
+              )
+            : null,
         onMiniWindow: mini,
       ),
       FormFactor.television => TelevisionPlayerPage(handle: widget.handle),
@@ -314,8 +409,9 @@ class _PlaybackPageState extends State<PlaybackPage> {
         onMiniWindow: mini,
       );
     }
-    return _wideVideo
-        ? LandscapePlayerPage(
+    final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
+    return _wideVideo && !portraitStyle
+        ? upstream.LandscapePlayerPage(
             store: widget.store,
             handle: widget.handle,
             onFullscreen: () => _padFullscreen.value = true,
@@ -324,6 +420,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
         : PortraitPlayerPage(
             store: widget.store,
             handle: widget.handle,
+            onFullscreen: _wideVideo ? () => _padFullscreen.value = true : null,
             onMiniWindow: mini,
           );
   }

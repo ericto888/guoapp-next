@@ -103,9 +103,13 @@ class PlaybackPreferences {
     this.showNetworkSpeed = true,
     this.autoHideControls = true,
     this.hideSystemBars = true,
+    this.portraitStyleForWide = false,
     this.autoPictureInPicture = false,
     this.videoFit = VideoFit.auto,
-  });
+    VideoFit? portraitVideoFit,
+    VideoFit? landscapeVideoFit,
+  }) : portraitVideoFit = portraitVideoFit ?? videoFit,
+       landscapeVideoFit = landscapeVideoFit ?? videoFit;
 
   final double speed;
   final int quality;
@@ -135,8 +139,15 @@ class PlaybackPreferences {
   final bool showNetworkSpeed;
   final bool autoHideControls;
   final bool hideSystemBars;
+  final bool portraitStyleForWide;
   final bool autoPictureInPicture;
+  /// Legacy shared value retained for older settings payloads.
   final VideoFit videoFit;
+  final VideoFit portraitVideoFit;
+  final VideoFit landscapeVideoFit;
+
+  VideoFit videoFitFor({required bool wideSource}) =>
+      wideSource ? landscapeVideoFit : portraitVideoFit;
 
   bool preopens({required bool television}) => preopen ?? !television;
 
@@ -166,8 +177,11 @@ class PlaybackPreferences {
     bool? showNetworkSpeed,
     bool? autoHideControls,
     bool? hideSystemBars,
+    bool? portraitStyleForWide,
     bool? autoPictureInPicture,
     VideoFit? videoFit,
+    VideoFit? portraitVideoFit,
+    VideoFit? landscapeVideoFit,
   }) => PlaybackPreferences(
     speed: speed ?? this.speed,
     quality: quality ?? this.quality,
@@ -194,8 +208,11 @@ class PlaybackPreferences {
     showNetworkSpeed: showNetworkSpeed ?? this.showNetworkSpeed,
     autoHideControls: autoHideControls ?? this.autoHideControls,
     hideSystemBars: hideSystemBars ?? this.hideSystemBars,
+    portraitStyleForWide: portraitStyleForWide ?? this.portraitStyleForWide,
     autoPictureInPicture: autoPictureInPicture ?? this.autoPictureInPicture,
     videoFit: videoFit ?? this.videoFit,
+    portraitVideoFit: portraitVideoFit ?? this.portraitVideoFit,
+    landscapeVideoFit: landscapeVideoFit ?? this.landscapeVideoFit,
   );
 
   Map<String, dynamic> toJson() => {
@@ -224,8 +241,11 @@ class PlaybackPreferences {
     'showNetworkSpeed': showNetworkSpeed,
     'autoHideControls': autoHideControls,
     'hideSystemBars': hideSystemBars,
+    'portraitStyleForWide': portraitStyleForWide,
     'autoPictureInPicture': autoPictureInPicture,
     'videoFit': videoFit.name,
+    'portraitVideoFit': portraitVideoFit.name,
+    'landscapeVideoFit': landscapeVideoFit.name,
   };
 
   factory PlaybackPreferences.fromJson(Map<String, dynamic> value) {
@@ -284,8 +304,17 @@ class PlaybackPreferences {
       showNetworkSpeed: value['showNetworkSpeed'] as bool? ?? true,
       autoHideControls: value['autoHideControls'] as bool? ?? true,
       hideSystemBars: value['hideSystemBars'] as bool? ?? true,
+      portraitStyleForWide: value['portraitStyleForWide'] as bool? ?? false,
       autoPictureInPicture: value['autoPictureInPicture'] as bool? ?? false,
       videoFit: VideoFit.values.asNameMap()[value['videoFit']] ?? VideoFit.auto,
+      portraitVideoFit:
+          VideoFit.values.asNameMap()[value['portraitVideoFit']] ??
+          VideoFit.values.asNameMap()[value['videoFit']] ??
+          VideoFit.auto,
+      landscapeVideoFit:
+          VideoFit.values.asNameMap()[value['landscapeVideoFit']] ??
+          VideoFit.values.asNameMap()[value['videoFit']] ??
+          VideoFit.auto,
     );
   }
 }
