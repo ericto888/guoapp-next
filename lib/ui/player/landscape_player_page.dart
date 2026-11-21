@@ -1802,8 +1802,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
         ? session.standby
         : null;
 
-    // 采用上游竖持播放器的固定 16:9 视频容器：视频位于页面上方，
-    // 简介/信息流独立放在视频下方，进度条仍固定在信息流底部。
+    // 按上游竖持播放器的结构：固定 16:9 视频在上方，
+    // 信息流/简介在视频下方，进度条固定在信息流底部。
     return ColoredBox(
       color: Colors.black,
       child: LayoutBuilder(
@@ -1812,106 +1812,97 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           return Column(
             children: [
               SizedBox(
-                width: constraints.maxWidth,
-                height: videoHeight,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                  SizedBox(
-                                          width: constraints.maxWidth,
-                                          height: videoHeight,
-                                          child: Stack(
-                                            fit: StackFit.expand,
-                                            children: [
-                                              if (player != null)
-                                                _heldVideoSurface(
-                                                  session,
-                                                  player,
-                                                  Size(constraints.maxWidth, videoHeight),
-                                                )
-                                              else
-                                                IgnorePointer(
-                                                  child: Center(
-                                                    child: Text(
-                                                      '第 ${session.detail.episodes[index].number} 集',
-                                                      style: TextStyle(
-                                                        color: Colors.white.withValues(
-                                                          alpha: .72,
+                                      width: constraints.maxWidth,
+                                      height: videoHeight,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          if (player != null)
+                                            _heldVideoSurface(
+                                              session,
+                                              player,
+                                              Size(constraints.maxWidth, videoHeight),
+                                            )
+                                          else
+                                            IgnorePointer(
+                                              child: Center(
+                                                child: Text(
+                                                  '第 ${session.detail.episodes[index].number} 集',
+                                                  style: TextStyle(
+                                                    color: Colors.white.withValues(
+                                                      alpha: .72,
+                                                    ),
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          if (current) ...[
+                                            DanmakuOverlay(
+                                              controller: session.danmaku,
+                                              video: session.videoSize,
+                                              fit: session.videoFit,
+                                              style: session.danmakuStyle,
+                                            ),
+                                            IgnorePointer(
+                                              // 外层 Stack 是 StackFit.expand，直接放 Container 会被
+                                              // 紧约束拉成整个视频大小（圆形遮罩巨大），用 Center 撑住。
+                                              child: Center(
+                                                child: AnimatedScale(
+                                                  duration: Motion.short,
+                                                  scale: session.paused ? 1 : .8,
+                                                  child: AnimatedOpacity(
+                                                    duration: Motion.short,
+                                                    opacity: session.paused ? 1 : 0,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(14),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black.withValues(
+                                                          alpha: .45,
                                                         ),
-                                                        fontSize: 15,
-                                                        fontWeight: FontWeight.w600,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.play_arrow_rounded,
+                                                        color: Colors.white,
+                                                        size: 48,
                                                       ),
                                                     ),
                                                   ),
                                                 ),
-                                              if (current) ...[
-                                                DanmakuOverlay(
-                                                  controller: session.danmaku,
-                                                  video: session.videoSize,
-                                                  fit: session.videoFit,
-                                                  style: session.danmakuStyle,
-                                                ),
-                                                IgnorePointer(
-                                                  // 外层 Stack 是 StackFit.expand，直接放 Container 会被
-                                                  // 紧约束拉成整个视频大小（圆形遮罩巨大），用 Center 撑住。
-                                                  child: Center(
-                                                    child: AnimatedScale(
-                                                      duration: Motion.short,
-                                                      scale: session.paused ? 1 : .8,
-                                                      child: AnimatedOpacity(
-                                                        duration: Motion.short,
-                                                        opacity: session.paused ? 1 : 0,
-                                                        child: Container(
-                                                          padding: const EdgeInsets.all(14),
-                                                          decoration: BoxDecoration(
-                                                            color: Colors.black.withValues(
-                                                              alpha: .45,
+                                              ),
+                                            ),
+                                            SwipeControls(
+                                              session: session,
+                                              enabled: false,
+                                              child: LayoutBuilder(
+                                                builder: (context, constraints) =>
+                                                    GestureDetector(
+                                                      behavior: HitTestBehavior.opaque,
+                                                      onTapUp: session.locked
+                                                          ? null
+                                                          : (details) => _tapUp(
+                                                              details,
+                                                              constraints.maxWidth,
+                                                              false,
                                                             ),
-                                                            shape: BoxShape.circle,
-                                                          ),
-                                                          child: const Icon(
-                                                            Icons.play_arrow_rounded,
-                                                            color: Colors.white,
-                                                            size: 48,
-                                                          ),
-                                                        ),
-                                                      ),
+                                                      onLongPressStart: session.locked
+                                                          ? null
+                                                          : (_) => _pressStart(),
+                                                      onLongPressEnd: session.locked
+                                                          ? null
+                                                          : (_) => _pressEnd(),
+                                                      onLongPressCancel: session.locked
+                                                          ? null
+                                                          : _pressEnd,
                                                     ),
-                                                  ),
-                                                ),
-                                                SwipeControls(
-                                                  session: session,
-                                                  enabled: false,
-                                                  child: LayoutBuilder(
-                                                    builder: (context, constraints) =>
-                                                        GestureDetector(
-                                                          behavior: HitTestBehavior.opaque,
-                                                          onTapUp: session.locked
-                                                              ? null
-                                                              : (details) => _tapUp(
-                                                                  details,
-                                                                  constraints.constraints.maxWidth,
-                                                                  false,
-                                                                ),
-                                                          onLongPressStart: session.locked
-                                                              ? null
-                                                              : (_) => _pressStart(),
-                                                          onLongPressEnd: session.locked
-                                                              ? null
-                                                              : (_) => _pressEnd(),
-                                                          onLongPressCancel: session.locked
-                                                              ? null
-                                                              : _pressEnd,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                  ],
-                ),
-              ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
               const SizedBox(height: 10),
               _fullscreenPill(),
               Expanded(child: _feed(context)),
