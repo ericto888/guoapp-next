@@ -426,6 +426,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     context,
     (_) => _EpisodeSheet(
       session: _session,
+      onSeasons: () => unawaited(_openSeasons()),
       canDownload:
           AppScope.of(context).repository.supportsDownloads &&
           widget.store.canDownload,
@@ -436,6 +437,22 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       ),
     ),
   );
+
+  Future<void> _openSeasons() async {
+    DramaSeason? picked;
+    await showPlayerSheet(
+      context,
+      (_) => SeasonSheet(session: _session, onSeason: (season) => picked = season),
+    );
+    if (!mounted) return;
+    if (picked case final season?) {
+      if (!await _session.playSeason(season) && mounted) {
+        _say('${season.label}切换失败，请稍后重试');
+      }
+    } else {
+      await _openEpisodes();
+    }
+  }
 
   void _saveFailed() {
     if (!mounted) return;
@@ -1242,10 +1259,12 @@ class _Shade extends StatelessWidget {
 class _EpisodeSheet extends StatefulWidget {
   const _EpisodeSheet({
     required this.session,
+    required this.onSeasons,
     required this.canDownload,
     required this.onDownload,
   });
   final PlaybackSession session;
+  final VoidCallback onSeasons;
   final bool canDownload;
   final ValueChanged<List<int>> onDownload;
 
@@ -1342,6 +1361,44 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
             child: ListenableBuilder(
               listenable: _session,
               builder: (context, _) => EpisodeGrid(
+                header: !_selecting && _session.detail.seasons.isNotEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: Material(
+                          color: colors.surfaceContainerHighest.withValues(alpha: .55),
+                          borderRadius: BorderRadius.circular(12),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () {
+                              Navigator.pop(context);
+                              widget.onSeasons();
+                            },
+                            child: SizedBox(
+                              height: 44,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.layers_rounded, size: 18, color: colors.primary),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _session.detail.seasons
+                                          .firstWhere((season) => season.drama.id == _session.detail.drama.id)
+                                          .label,
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                    ),
+                                    const Spacer(),
+                                    Text('共 ${_session.detail.seasons.length} 季', style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant)),
+                                    const SizedBox(width: 6),
+                                    Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : null,
                 episodes: episodes,
                 current: _session.index,
                 selecting: _selecting,
@@ -1359,6 +1416,85 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class SeasonSheet extends StatelessWidget {
+  const SeasonSheet({super.key, required this.session, required this.onSeason});
+  final PlaybackSession session;
+  final ValueChanged<DramaSeason> onSeason;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final seasons = session.detail.seasons;
+    final playing = session.detail.drama.id;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SheetHeader(
+          children: [
+            const Expanded(child: Text('选择季', style: sheetTitle)),
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close_rounded),
+              tooltip: '关闭',
+            ),
+          ],
+        ),
+        Flexible(
+          child: SafeArea(
+            top: false,
+            child: GridView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              itemCount: seasons.length,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 120,
+                mainAxisExtent: 48,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemBuilder: (context, index) {
+                final season = seasons[index];
+                final current = season.drama.id == playing;
+                return Material(
+                  color: current
+                      ? colors.primaryContainer
+                      : colors.surfaceContainerHighest.withValues(alpha: .55),
+                  borderRadius: BorderRadius.circular(14),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: current
+                        ? null
+                        : () {
+                            onSeason(season);
+                            Navigator.pop(context);
+                          },
+                    child: Center(
+                      child: Text(
+                        season.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: current
+                              ? colors.onPrimaryContainer
+                              : colors.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
