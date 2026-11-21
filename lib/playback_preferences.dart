@@ -197,6 +197,7 @@ class PlaybackPreferences {
     showNetworkSpeed: showNetworkSpeed ?? this.showNetworkSpeed,
     autoHideControls: autoHideControls ?? this.autoHideControls,
     hideSystemBars: hideSystemBars ?? this.hideSystemBars,
+    portraitStyleForWide: portraitStyleForWide ?? this.portraitStyleForWide,
     autoPictureInPicture: autoPictureInPicture ?? this.autoPictureInPicture,
     videoFit: videoFit ?? this.videoFit,
   );
