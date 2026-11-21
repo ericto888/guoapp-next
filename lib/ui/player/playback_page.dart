@@ -48,6 +48,8 @@ class _PlaybackPageState extends State<PlaybackPage> {
   MediaQueryData? _media;
   bool _shown = false;
   bool _locked = false;
+  bool _wasPlayingBeforeOrientationChange = false;
+  Orientation? _lastOrientation;
   Player? _bound;
   StreamSubscription<bool>? _playing;
 
@@ -119,8 +121,36 @@ class _PlaybackPageState extends State<PlaybackPage> {
     final player = _session.player;
     if (identical(player, _bound)) return;
     _bound = player;
+    _wasPlayingBeforeOrientationChange = player.state.playing;
     unawaited(_playing?.cancel());
-    _playing = player.stream.playing.listen((_) => _sync());
+    _playing = player.stream.playing.listen((playing) {
+      _wasPlayingBeforeOrientationChange = playing;
+      _sync();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final orientation = MediaQuery.orientationOf(context);
+    final previous = _lastOrientation;
+    _lastOrientation = orientation;
+    if (previous == Orientation.portrait &&
+        orientation == Orientation.landscape &&
+        _wideVideo &&
+        widget.store.playbackPreferences.portraitStyleForWide &&
+        _wasPlayingBeforeOrientationChange &&
+        !_session.player.state.playing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            MediaQuery.orientationOf(context) != Orientation.landscape ||
+            !_wasPlayingBeforeOrientationChange ||
+            _session.player.state.playing) {
+          return;
+        }
+        unawaited(_session.player.play());
+      });
+    }
   }
 
   void _sync() {
