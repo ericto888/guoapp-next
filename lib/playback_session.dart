@@ -565,7 +565,8 @@ class PlaybackSession extends ChangeNotifier {
         );
         if (savedIndex >= 0) index = savedIndex;
       }
-      final position = watch != null &&
+      final position =
+          watch != null &&
               !watch.finished &&
               watch.episode == next.episodes[index].number
           ? watch.position
