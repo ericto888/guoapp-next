@@ -517,12 +517,30 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                 backgroundColor: Colors.black,
                 body: Theme(
                   data: dark,
-                  child: Column(
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      _appBar(context),
-                      // 整块区域（视频 + 信息流）都在 PageView 里，整屏上下滑。
-                      Expanded(child: video),
-                      _episodeBar(context),
+                      Column(
+                        children: [
+                          _appBar(context),
+                          // 整块区域（视频 + 信息流）都在 PageView 里，整屏上下滑。
+                          Expanded(child: video),
+                          _episodeBar(context),
+                        ],
+                      ),
+                      // 竖屏手持横片：加载层以整个手机可视区域为基准，
+                      // 不受视频区偏下布局和“全屏观看”按钮位置影响。
+                      if (_session.loading ||
+                          (_session.ready && _session.stalled))
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: Center(
+                              child: _session.loading
+                                  ? PlaybackLoading(session: _session)
+                                  : const CircularProgressIndicator(),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -562,7 +580,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
         ),
         FadePresence(
           duration: Motion.medium,
-          child: session.ready && session.stalled
+          child: full && session.ready && session.stalled
               ? const IgnorePointer(
                   child: Center(child: CircularProgressIndicator()),
                 )
@@ -1833,10 +1851,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                                 ),
                               ),
                             if (current) ...[
-                              if (session.loading)
-                                IgnorePointer(
-                                  child: PlaybackLoading(session: session),
-                                ),
                               DanmakuOverlay(
                                 controller: session.danmaku,
                                 video: session.videoSize,
