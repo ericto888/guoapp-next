@@ -62,8 +62,28 @@ class _PlaybackPageState extends State<PlaybackPage> {
     currentWide: _wideVideo,
   );
 
+  bool _wideAutoRotationApplied = false;
+
   bool get _television =>
       AppScope.formFactorOf(context) == FormFactor.television;
+
+  /// 竖持横片模式交给系统方向传感器：用户物理横持时直接切换到
+  /// 自定义横屏真全屏页面，不再要求先点“全屏观看”。
+  void _syncWideAutoRotation({bool? wide}) {
+    if (!mounted) return;
+    final enabled =
+        !desktopPlatform &&
+        AppScope.formFactorOf(context) == FormFactor.phone &&
+        (wide ?? _wideVideo) &&
+        widget.store.playbackPreferences.portraitStyleForWide;
+    if (enabled == _wideAutoRotationApplied) return;
+    _wideAutoRotationApplied = enabled;
+    if (enabled) {
+      unawaited(AppDevice.setPlayerOrientation(PlayerOrientation.auto));
+    } else {
+      unawaited(AppDevice.releaseOrientation());
+    }
+  }
 
   @override
   void initState() {
@@ -74,7 +94,10 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _pip.addListener(_pipChanged);
     _pip.onAction = _action;
     _bind();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sync();
+      _syncWideAutoRotation();
+    });
   }
 
   @override
@@ -86,6 +109,10 @@ class _PlaybackPageState extends State<PlaybackPage> {
     if (_pip.window) unawaited(_restore());
     unawaited(_playing?.cancel());
     _pageScope.dispose();
+    if (_wideAutoRotationApplied) {
+      _wideAutoRotationApplied = false;
+      unawaited(AppDevice.releaseOrientation());
+    }
     if (_padFullscreen.value) _applyPadFullscreen(false);
     _padFullscreen.dispose();
     unawaited(AppDevice.resetBrightness());
@@ -100,6 +127,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
     final wide = _measure();
     final swapped = !identical(previous, _bound);
     if (wide != _wideVideo || swapped) setState(() => _wideVideo = wide);
+    _syncWideAutoRotation(wide: wide);
     if (_session.locked != _locked) {
       _locked = _session.locked;
       _holdOrientation(_locked);
