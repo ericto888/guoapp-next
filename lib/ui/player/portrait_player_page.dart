@@ -769,7 +769,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           right: 16,
           bottom: bottom + 108,
           height: 124,
-          child: _dragging ? const SizedBox.shrink() : _chrome(_dramaInfo(context)),
+          child: _dragging
+              ? const SizedBox.shrink()
+              : _chrome(_dramaInfo(context)),
         ),
         Positioned(
           key: const ValueKey('progress'),
