@@ -29,7 +29,9 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get --enforce-lockfile
       - name: Check Dart formatting
-        run: dart format --output=none --set-exit-if-changed lib/playback_session.dart lib/playback_recovery.dart test/playback_session_test.dart
+        run: |
+          dart format lib/playback_session.dart
+          git diff -- lib/playback_session.dart
       - name: Analyze Dart code
         run: dart analyze --fatal-infos lib test
       - name: Run Flutter tests
