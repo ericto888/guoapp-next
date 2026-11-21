@@ -10,6 +10,7 @@ import '../../picture_in_picture.dart';
 import '../../playback_session.dart';
 import '../app_scope.dart';
 import 'upstream_landscape_player_page.dart' as upstream;
+import 'landscape_player_page.dart' as customLandscape;
 import 'mini_player.dart';
 import 'playback_handle.dart';
 import 'player_page.dart';
@@ -48,7 +49,6 @@ class _PlaybackPageState extends State<PlaybackPage> {
   MediaQueryData? _media;
   bool _shown = false;
   bool _locked = false;
-  bool _wasPlayingBeforeOrientationChange = false;
   Orientation? _lastOrientation;
   Player? _bound;
   StreamSubscription<bool>? _playing;
@@ -121,12 +121,8 @@ class _PlaybackPageState extends State<PlaybackPage> {
     final player = _session.player;
     if (identical(player, _bound)) return;
     _bound = player;
-    _wasPlayingBeforeOrientationChange = player.state.playing;
     unawaited(_playing?.cancel());
-    _playing = player.stream.playing.listen((playing) {
-      _wasPlayingBeforeOrientationChange = playing;
-      _sync();
-    });
+    _playing = player.stream.playing.listen((_) => _sync());
   }
 
   @override
@@ -139,12 +135,12 @@ class _PlaybackPageState extends State<PlaybackPage> {
         orientation == Orientation.landscape &&
         _wideVideo &&
         widget.store.playbackPreferences.portraitStyleForWide &&
-        _wasPlayingBeforeOrientationChange &&
+        !_session.paused &&
         !_session.player.state.playing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
             MediaQuery.orientationOf(context) != Orientation.landscape ||
-            !_wasPlayingBeforeOrientationChange ||
+            _session.paused ||
             _session.player.state.playing) {
           return;
         }
@@ -296,6 +292,16 @@ class _PlaybackPageState extends State<PlaybackPage> {
       final size = MediaQuery.sizeOf(context);
       return switch (form) {
         FormFactor.phone
+            when _wideVideo &&
+                portraitStyle &&
+                MediaQuery.orientationOf(context) == Orientation.landscape =>
+          customLandscape.LandscapePlayerPage(
+            store: widget.store,
+            handle: widget.handle,
+            onFullscreen: () {},
+            onMiniWindow: mini,
+          ),
+        FormFactor.phone
             when _wideVideo && !portraitStyle =>
           upstream.LandscapePlayerPage(
             store: widget.store,
@@ -325,8 +331,16 @@ class _PlaybackPageState extends State<PlaybackPage> {
       FormFactor.pad || FormFactor.window => _padPage(context, mini),
       FormFactor.phone
           when _wideVideo &&
-              !(portraitStyle &&
-                  MediaQuery.orientationOf(context) == Orientation.portrait) =>
+              portraitStyle &&
+              MediaQuery.orientationOf(context) == Orientation.landscape =>
+        customLandscape.LandscapePlayerPage(
+          store: widget.store,
+          handle: widget.handle,
+          onFullscreen: () {},
+          onMiniWindow: mini,
+        ),
+      FormFactor.phone
+          when _wideVideo && !portraitStyle =>
         upstream.LandscapePlayerPage(
           store: widget.store,
           handle: widget.handle,
