@@ -649,6 +649,22 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     );
     final bottom = padding.bottom;
     final locked = session.boostLocked;
+    final widePortrait = _keepWidePortraitChrome;
+    final video = session.videoSize;
+    final screen = MediaQuery.sizeOf(context);
+    final fullscreenTop = widePortrait && widget.onFullscreen != null && video != null
+        ? (() {
+            final fitted = session.videoFit.size(
+              screen,
+              video,
+              MediaQuery.devicePixelRatioOf(context),
+            );
+            final videoBottom = (screen.height + fitted.height) / 2 - 32;
+            // 按视频实际显示区域放置，并确保按钮位于简介卡片上方。
+            final introTop = screen.height - bottom - 256;
+            return (videoBottom + 8).clamp(0.0, math.max(0.0, introTop - 44));
+          })()
+        : null;
     _syncSystemBars();
     return Stack(
       fit: StackFit.expand,
@@ -774,7 +790,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             key: const ValueKey('fullscreen'),
             left: 0,
             right: 0,
-            bottom: bottom + 8,
+            top: fullscreenTop,
+            bottom: fullscreenTop == null ? bottom + 8 : null,
             height: 36,
             child: _chrome(
               Center(
