@@ -552,7 +552,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               child: Transform.translate(
                 offset: session.videoSize != null &&
                         session.videoSize!.width >= session.videoSize!.height
-                    ? const Offset(0, -32)
+                    ? const Offset(0, -40)
                     : Offset.zero,
                 child: AnimatedScale(
                   scale: _zoom,
@@ -580,7 +580,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 fit: session.videoFit,
                 style: session.danmakuStyle,
                 topLimit: MediaQuery.paddingOf(context).top + 56,
-                videoOffsetY: -32,
+                videoOffsetY: -40,
               ),
             ),
           FadePresence(
