@@ -1383,8 +1383,10 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
                                     const SizedBox(width: 8),
                                     Text(
                                       _session.detail.seasons
-                                          .firstWhere((season) => season.drama.id == _session.detail.drama.id)
-                                          .label,
+                                              .where((season) => season.drama.id == _session.detail.drama.id)
+                                              .map((season) => season.label)
+                                              .firstOrNull ??
+                                          '系列多季',
                                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                                     ),
                                     const Spacer(),
