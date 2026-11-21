@@ -661,7 +661,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             );
             final videoBottom = (screen.height + fitted.height) / 2 - 32;
             // 按视频实际显示区域放置，并确保按钮位于简介卡片上方。
-            final introTop = screen.height - bottom - 256;
+            final introTop = screen.height - bottom - 232;
             return (videoBottom + 8)
                 .clamp(0.0, math.max(0.0, introTop - 44))
                 .toDouble();
@@ -753,7 +753,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         Positioned(
           left: 0,
           right: 0,
-          bottom: bottom + 140,
+          bottom: bottom + 116,
           child: FadePresence(
             scaleFrom: .9,
             child: _dragging
@@ -767,7 +767,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           key: const ValueKey('drama-info'),
           left: 16,
           right: 16,
-          bottom: bottom + 132,
+          bottom: bottom + 108,
           height: 124,
           child: _chrome(_dramaInfo(context)),
         ),
@@ -775,7 +775,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           key: const ValueKey('progress'),
           left: 16,
           right: 16,
-          bottom: bottom + 92,
+          bottom: bottom + 68,
           height: 32,
           child: _chrome(_progress(context)),
         ),
@@ -783,7 +783,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           key: const ValueKey('episodes'),
           left: 16,
           right: 16,
-          bottom: bottom + 52,
+          bottom: bottom + 28,
           height: 40,
           child: _chrome(_episodeStrip()),
         ),
