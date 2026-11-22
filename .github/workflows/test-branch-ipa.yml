@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - test/upstream-portrait-player-layout
+      - feature/inline-category-filters
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
