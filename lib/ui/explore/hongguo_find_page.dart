@@ -292,7 +292,22 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       builder: (context, _) {
         final items = explore.items;
         if (feed.items.isEmpty) {
-          return _status(feed);
+          return RefreshIndicator(
+            onRefresh: () => feed.reload(force: true),
+            child: CustomScrollView(
+              controller: _scroll,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(child: _genreAndBoards(inset)),
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: feed.loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _status(feed),
+                ),
+              ],
+            ),
+          );
         }
         final width = MediaQuery.sizeOf(context).width - inset * 2;
         final top = items.take(3).toList();
