@@ -41,11 +41,20 @@ def validate_package(package, prefix):
             raise SystemExit('iOS 压缩包损坏：' + corrupt)
 
 
-def write_app_config():
+def write_app_config(unsigned=False):
     display = app.display_name
     config = root / 'ios' / 'Flutter' / 'AppVariant.xcconfig'
-    config.write_text(f'PRODUCT_BUNDLE_IDENTIFIER = {app.bundle_identifier}\n'
-                      f'APP_DISPLAY_NAME = {display}\n', encoding='utf-8')
+    values = [
+        f'PRODUCT_BUNDLE_IDENTIFIER = {app.bundle_identifier}',
+        f'APP_DISPLAY_NAME = {display}',
+    ]
+    if unsigned:
+        values.extend([
+            'CODE_SIGNING_ALLOWED = NO',
+            'CODE_SIGNING_REQUIRED = NO',
+            'CODE_SIGN_IDENTITY =',
+        ])
+    config.write_text('\n'.join(values) + '\n', encoding='utf-8')
 
 
 def build_core(simulator=False, bundles=()):
@@ -105,7 +114,7 @@ def main():
     parser.add_argument('--export-options', type=Path, help='使用自己的 Xcode 签名配置导出 IPA')
     parser.add_argument('--bundle', action='append', default=[], help='内置模块目录，可多次指定；也可用逗号分隔写在环境变量 BUNDLED_MODULES 里')
     options = parser.parse_args()
-    write_app_config()
+    write_app_config(unsigned=options.export_options is None)
     build_core(options.simulator, options.bundle)
     if options.core_only:
         return
@@ -131,14 +140,17 @@ def main():
         try:
             run([flutter, 'build', 'ios', '--release', '--no-codesign', '--no-pub', *app.flutter_arguments])
         except subprocess.CalledProcessError:
-            # 某些 Xcode 版本会在完成未签名的 Xcode build 后，仍由 Flutter
-            # 的部署检查报告缺少 Development Team。只在产物确实存在时继续，
-            # 后续的架构、签名、FFI 和 IPA 完整性检查仍必须全部通过。
-            candidate = root / 'build' / 'ios' / 'iphoneos' / 'Runner.app'
-            if not candidate.is_dir():
+            # 仅当 Xcode 已生成 Runner.app 时才继续；后续仍执行全部产物校验。
+            candidates = list((root / 'build' / 'ios').rglob('Runner.app'))
+            application = next(
+                (candidate for candidate in candidates if (candidate / 'Runner').is_file()),
+                None,
+            )
+            if application is None:
                 raise
             print('Flutter 部署检查返回非零，继续验证已生成的未签名 Runner.app。', flush=True)
-        application = root / 'build' / 'ios' / 'iphoneos' / 'Runner.app'
+        else:
+            application = root / 'build' / 'ios' / 'iphoneos' / 'Runner.app'
         validate_unsigned_application(application)
         symbols = subprocess.check_output(['xcrun', 'nm', '-gU', str(application / 'Runner')], text=True)
         for symbol in ['_DuanjuRequest', '_DuanjuFree']:
