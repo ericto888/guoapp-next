@@ -43,6 +43,10 @@ func (p *jsProvider) quickCall(function string, result any, arguments ...any) er
 }
 
 func (p *jsProvider) Suggestions(ctx context.Context, query string) ([]string, error) {
+	var names []string
+	return names, p.call(ctx, "suggestions", &names, query)
+}
+
 func (p *jsProvider) CategoryPanel(ctx context.Context, genre string) (CategoryFilterPanel, error) {
 	var panel CategoryFilterPanel
 	return panel, p.call(ctx, "categoryPanel", &panel, genre)
@@ -52,11 +56,6 @@ func (p *jsProvider) CategoryFilterPage(ctx context.Context, genre string, filte
 	var page CategoryFilterPage
 	err := p.call(ctx, "categoryFilterPage", &page, genre, filterIDs, offset, sessionID, seenIDs)
 	return page, err
-}
-
-
-	var names []string
-	return names, p.call(ctx, "suggestions", &names, query)
 }
 
 func (p *jsProvider) ValidRecommendation(genre string, cursor json.RawMessage) error {
