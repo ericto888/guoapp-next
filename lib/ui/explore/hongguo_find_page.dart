@@ -577,7 +577,6 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     CategoryFilterRow row,
     List<CategoryFilterItem> items,
   ) {
-    final colors = Theme.of(context).colorScheme;
     final selected = _selected[row.type] ?? const <String>{};
     final allItem = items.firstWhere(
       (item) => item.id.isEmpty,
@@ -605,7 +604,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       child: Row(
         children: [
           SizedBox(
-            width: 88,
+            width: 100,
             child: Align(
               alignment: Alignment.centerLeft,
               child: row.singleChoice
