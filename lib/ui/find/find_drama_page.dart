@@ -346,11 +346,7 @@ class FindDramaPageState extends State<FindDramaPage> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([
-      _explore!,
-      widget.store,
-      ?_filterFeed,
-    ]),
+    listenable: Listenable.merge([_explore!, widget.store, ?_filterFeed]),
     builder: (context, _) {
       final explore = _explore!;
       _resetScroll(explore);
