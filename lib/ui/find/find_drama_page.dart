@@ -62,7 +62,7 @@ class FindDramaPageState extends State<FindDramaPage> {
   }
 
   List<CatalogCategory> _options(ExploreFeed explore) =>
-      _mode == _FindMode.rank ? explore.tabs : explore.categories;
+      _mode == _FindMode.rank ? explore.rankingTabs : explore.categories;
 
   void _changeMode(_FindMode mode, ExploreFeed explore) {
     if (_mode == mode) return;
@@ -75,7 +75,7 @@ class FindDramaPageState extends State<FindDramaPage> {
       _filterFeed = null;
       unawaited(_ensureCategoryFilters(explore));
     }
-    final options = mode == _FindMode.rank ? explore.tabs : explore.categories;
+    final options = mode == _FindMode.rank ? explore.rankingTabs : explore.categories;
     if (options.isNotEmpty && !options.any((tab) => tab.id == explore.tab.id)) {
       explore.select(options.first.id);
     }
