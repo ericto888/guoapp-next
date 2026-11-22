@@ -13,6 +13,7 @@ import '../app_scope.dart';
 import '../explore/explore_page.dart';
 import '../explore/source_actions.dart';
 import '../follow/follow_page.dart';
+import '../find/find_drama_page.dart';
 import '../history/history_page.dart';
 import '../mine/mine_page.dart';
 import '../update_prompt.dart';
@@ -25,6 +26,7 @@ import '../widgets/source_bar.dart';
 
 enum AppTab {
   explore('发现', Icons.explore_outlined, Icons.explore),
+  find('找剧', Icons.grid_view_rounded, Icons.grid_view_rounded),
   follow('追剧', Icons.bookmark_border_rounded, Icons.bookmark_rounded),
   history('历史', Icons.history_rounded, Icons.history_rounded),
   mine('我的', Icons.person_outline_rounded, Icons.person_rounded);
@@ -85,6 +87,7 @@ class _AppShellState extends State<AppShell> {
   final _header = FocusNode();
   final _televisionTabs = GlobalKey();
   final _explore = GlobalKey<ExplorePageState>();
+  final _find = GlobalKey<FindDramaPageState>();
   var _tab = AppTab.explore;
   var _headerFocused = false;
   FocusNode? _lastFocus;
@@ -154,6 +157,8 @@ class _AppShellState extends State<AppShell> {
       if (switch (tab) {
         AppTab.history =>
           widget.store.historyTab && !AppScope.of(context).television,
+        AppTab.find =>
+          widget.store.findDramaTab && !AppScope.of(context).television,
         AppTab.explore || AppTab.follow || AppTab.mine => true,
       })
         tab,
@@ -168,6 +173,7 @@ class _AppShellState extends State<AppShell> {
       return navigator.popUntil((route) => route.isFirst);
     }
     if (tab == AppTab.explore) return _explore.currentState?.reselect();
+    if (tab == AppTab.find) return _find.currentState?.reselect();
     for (final position in _tabScrolls[tab.index].positions) {
       if (position.pixels <= position.minScrollExtent) continue;
       unawaited(
@@ -235,6 +241,7 @@ class _AppShellState extends State<AppShell> {
 
   Widget _root(AppTab tab) => switch (tab) {
     AppTab.explore => ExplorePage(key: _explore, store: widget.store),
+    AppTab.find => FindDramaPage(key: _find, store: widget.store),
     AppTab.follow => FollowPage(
       store: widget.store,
       entryFocus: _followEntry,
@@ -344,7 +351,9 @@ class _AppShellState extends State<AppShell> {
                         final entry = switch (_tab) {
                           AppTab.follow => _followEntry,
                           AppTab.mine => _mineEntry,
-                          AppTab.explore || AppTab.history => null,
+                          AppTab.explore ||
+                          AppTab.find ||
+                          AppTab.history => null,
                         };
                         if (event is KeyUpEvent ||
                             event.logicalKey != LogicalKeyboardKey.arrowDown ||
