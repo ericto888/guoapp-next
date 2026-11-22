@@ -23,6 +23,7 @@ import '../widgets/status_view.dart';
 import '../widgets/swipe_switch.dart';
 import 'explore_hero.dart';
 import 'source_actions.dart';
+import 'hongguo_find_page.dart';
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key, required this.store});
@@ -242,14 +243,24 @@ class ExplorePageState extends State<ExplorePage> {
                       ),
                   ],
                 ),
-              if (!television || explore.feed!.items.isEmpty) tabs,
-              Expanded(
-                child: _swipeTabs(
-                  explore,
-                  form,
-                  _content(explore, inset, television, tabs),
+              if (explore.groupedRankings)
+                Expanded(
+                  child: HongguoFindPage(
+                    explore: explore,
+                    store: widget.store,
+                    onOpen: _open,
+                  ),
+                )
+              else ...[
+                if (!television || explore.feed!.items.isEmpty) tabs,
+                Expanded(
+                  child: _swipeTabs(
+                    explore,
+                    form,
+                    _content(explore, inset, television, tabs),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
