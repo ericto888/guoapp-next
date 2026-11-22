@@ -88,6 +88,7 @@ class _AppShellState extends State<AppShell> {
   final _televisionTabs = GlobalKey();
   final _explore = GlobalKey<ExplorePageState>();
   var _tab = AppTab.explore;
+  late String _source = widget.store.source;
   var _headerFocused = false;
   FocusNode? _lastFocus;
   Timer? _exitWindow;
@@ -154,9 +155,11 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _storeChanged() {
-    if (!mounted) return;
+    final source = widget.store.source;
+    if (!mounted || source == _source) return;
+    _source = source;
     setState(() {
-      if (widget.store.source != hongguoSourceId && _tab == AppTab.find) {
+      if (source != hongguoSourceId && _tab == AppTab.find) {
         _tab = AppTab.explore;
       }
     });
