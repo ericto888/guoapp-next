@@ -246,6 +246,7 @@ class ExplorePageState extends State<ExplorePage> {
               if (explore.groupedRankings)
                 Expanded(
                   child: HongguoFindPage(
+                    key: ValueKey(source.id),
                     explore: explore,
                     store: widget.store,
                     onOpen: _open,
