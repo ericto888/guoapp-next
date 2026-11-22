@@ -137,6 +137,14 @@ class AppearanceSettings extends StatelessWidget {
           children: [
             if (!AppScope.of(context).television) ...[
               SwitchTile(
+                title: '在主页底栏显示找剧',
+                subtitle: '开启后在主页底栏显示独立的红果找剧入口',
+                value: store.findDramaTab,
+                onChanged: (value) =>
+                    saveSetting(context, () => store.setFindDramaTab(value)),
+              ),
+              const Divider(indent: 16, endIndent: 16),
+              SwitchTile(
                 title: '在主页底栏显示历史',
                 subtitle: '关闭后仍可在「我的」里打开观看记录',
                 value: store.historyTab,
