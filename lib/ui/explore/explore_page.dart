@@ -184,7 +184,9 @@ class ExplorePageState extends State<ExplorePage> {
           child: Column(
             children: [
               if (!television)
-                SourceBar(
+                HideOnScroll(
+                  alignment: Alignment.bottomCenter,
+                  child: SourceBar(
                   source: source.name,
                   searchController: _search,
                   onSwitchSource: (anchor) => pickSource(anchor, widget.store),
@@ -209,6 +211,7 @@ class ExplorePageState extends State<ExplorePage> {
                         onPressed: explore.refresh,
                       ),
                   ],
+                  ),
                 ),
               if (!television || explore.feed!.items.isEmpty) tabs,
               Expanded(
