@@ -175,12 +175,12 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       if (_filterGenre == item.id) return;
       setState(() {
         _filterGenre = item.id;
-        _selected
-          ..clear()
-          ..addAll(item.id.isEmpty ? {} : {'genre': {item.id}});
-        _selectedNames
-          ..clear()
-          ..addAll(item.id.isEmpty ? {} : {item.id: item.name});
+        _selected.clear();
+        _selectedNames.clear();
+        if (item.id.isNotEmpty) {
+          _selected['genre'] = {item.id};
+          _selectedNames[item.id] = item.name;
+        }
         _panel = null;
       });
       _filterGeneration++;
