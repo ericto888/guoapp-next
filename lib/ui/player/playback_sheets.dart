@@ -175,29 +175,31 @@ class PlaybackSettingsList extends StatelessWidget {
                       ),
                   ],
           ),
-          const SizedBox(height: 18),
-          Text(
-            session.wideVideoSource ? '画面比例 · 横屏片源' : '画面比例 · 竖屏片源',
-            style: label,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '横屏与竖屏片源分别记忆设置，互不影响',
-            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final fit in VideoFit.values)
-                _Choice(
-                  label: fit.label,
-                  selected: fit == session.videoFit,
-                  onSelected: () => _change(() => session.setVideoFit(fit)),
-                ),
-            ],
-          ),
+          if (!session.audio) ...[
+            const SizedBox(height: 18),
+            Text(
+              session.wideVideoSource ? '画面比例 · 横屏片源' : '画面比例 · 竖屏片源',
+              style: label,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '横屏与竖屏片源分别记忆设置，互不影响',
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final fit in VideoFit.values)
+                  _Choice(
+                    label: fit.label,
+                    selected: fit == session.videoFit,
+                    onSelected: () => _change(() => session.setVideoFit(fit)),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 18),
           Text(sleepTimerLabel(session), style: label),
           const SizedBox(height: 10),
