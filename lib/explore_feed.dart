@@ -173,8 +173,9 @@ class ExploreFeed extends ChangeNotifier {
     if (source == null ||
         rankingMode ||
         tabs.isEmpty ||
-        _tab.id != tabs.first.id)
+        _tab.id != tabs.first.id) {
       return null;
+    }
     return store.history
         .where((entry) => entry.drama.source == source.id)
         .firstOrNull;
