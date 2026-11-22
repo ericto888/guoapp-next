@@ -179,8 +179,13 @@ class ExploreFeed extends ChangeNotifier {
     final feed = _feed = _feeds[feedKey] = tab.id == recommendTab.id
         ? DramaFeed(
             cumulative: true,
-            load: (page, force) =>
-                _saved(catalog.recommendations(more: page > 1, force: force)),
+            load: (page, force) => _saved(
+              catalog.recommendations(
+                genre: _recommendationGenre,
+                more: page > 1,
+                force: force,
+              ),
+            ),
           )
         : board != null
         ? DramaFeed(
@@ -196,6 +201,13 @@ class ExploreFeed extends ChangeNotifier {
     unawaited(feed.reload());
     _notify();
   }
+
+  String get _recommendationGenre =>
+      _genre.id == 'short_play' ||
+          _genre.id == 'comic_series' ||
+          _genre.id == 'ai_series'
+      ? _genre.id
+      : SourceCatalog.recommendGenre;
 
   String _feedKey(CatalogCategory tab) => '${_genre.id}|${tab.id}';
 
