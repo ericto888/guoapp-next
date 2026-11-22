@@ -13,7 +13,7 @@ const recommendTab = CatalogCategory('app:recommend', '推荐');
 
 CatalogCategory rankingTab(RankingBoard board) {
   final name = board.name.replaceFirst(
-    RegExp(r'^(全部|真人剧|漫剧|AI剧)\\s*[·•]\\s*'),
+    RegExp(r'^(全部|真人剧|漫剧|AI剧)\s*[·•]\s*'),
     '',
   );
   return CatalogCategory('app:rank:${board.id}', name);
@@ -63,10 +63,32 @@ class ExploreFeed extends ChangeNotifier {
     return 'all';
   }
 
-  List<RankingBoard> get _visibleBoards => [
-    for (final board in _catalog?.boards ?? const <RankingBoard>[])
-      if (_boardGenre(board) == _genre.id) board,
-  ];
+  List<RankingBoard> get _visibleBoards {
+    const order = [
+      'hot',
+      'recommend',
+      'new',
+      'hot_search',
+      'must_watch',
+      'followed',
+      'zhenguo',
+      'subscribe',
+    ];
+    final boards = [
+      for (final board in _catalog?.boards ?? const <RankingBoard>[])
+        if (_boardGenre(board) == _genre.id) board,
+    ];
+    boards.sort((a, b) {
+      final aKey = a.id.split('-').last;
+      final bKey = b.id.split('-').last;
+      final ai = order.indexOf(aKey);
+      final bi = order.indexOf(bKey);
+      return (ai < 0 ? order.length : ai).compareTo(
+        bi < 0 ? order.length : bi,
+      );
+    });
+    return boards;
+  }
 
   List<CatalogCategory> get tabs {
     final catalog = _catalog;
@@ -108,7 +130,7 @@ class ExploreFeed extends ChangeNotifier {
 
   WatchEntry? get resume {
     final source = this.source;
-    if (source == null || _tab.id != tabs.first.id) return null;
+    if (source == null || tabs.isEmpty || _tab.id != tabs.first.id) return null;
     return store.history
         .where((entry) => entry.drama.source == source.id)
         .firstOrNull;
