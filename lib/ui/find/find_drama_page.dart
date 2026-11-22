@@ -499,7 +499,7 @@ class FindDramaPageState extends State<FindDramaPage> {
                                     sliver: DramaSliverGrid(
                                       width: constraints.maxWidth - inset * 2,
                                       items: visibleItems,
-                                      rankOf: rankMode && _filterFeed == null ? explore.rankOf : null,
+                                      rankOf: rankMode ? explore.rankOf : null,
                                       onOpen: _open,
                                     ),
                                   ),
