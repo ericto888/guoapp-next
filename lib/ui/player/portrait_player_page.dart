@@ -1018,7 +1018,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                   final enabled = session.danmaku.enabled;
                   return Align(
                     alignment: Alignment.centerLeft,
-                    child: Material(
+                    child: Tooltip(
+                      message: enabled ? '关闭弹幕' : '开启弹幕',
+                      child: Material(
                       color: Colors.black.withValues(alpha: .32),
                       borderRadius: BorderRadius.circular(16),
                       child: InkWell(
@@ -1047,6 +1049,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                           ),
                         ),
                       ),
+                    ),
                     ),
                   );
                 },
