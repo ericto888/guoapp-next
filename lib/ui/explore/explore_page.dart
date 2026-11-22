@@ -18,6 +18,7 @@ import '../widgets/choice_panel.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/follow_button.dart';
 import '../widgets/motion/motion_widgets.dart';
+import '../widgets/motion/motion_widgets.dart';
 import '../widgets/page_header.dart';
 import '../widgets/pull_refresh.dart';
 import '../widgets/source_bar.dart';
