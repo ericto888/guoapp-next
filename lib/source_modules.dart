@@ -108,6 +108,7 @@ const moduleCapabilityNames = {
   'cover': '封面',
   'metadata': '补充信息',
   'catalogState': '目录状态',
+  'categoryFilters': '多维分类筛选',
 };
 
 String? missingSourceHint(Map<String, int> counts, String unit) {

@@ -1,0 +1,48 @@
+name: Validate Hongguo category filter bridge
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - feature/hongguo-category-filter-app
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hongguo-category-filter-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Dart format check
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Dart analyzer
+        run: dart analyze --fatal-infos lib test
+      - name: Flutter tests
+        run: flutter test --dart-define=DISABLE_REMOTE_IMAGES=true
+
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/go.mod
+          cache-dependency-path: native/go.sum
+      - name: Go tests
+        working-directory: native
+        run: go test -race ./...

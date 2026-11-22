@@ -85,6 +85,35 @@ type LibraryMoreKey struct{}
 
 type LibraryKnownKey struct{}
 
+type CategoryFilterer interface {
+	CategoryPanel(ctx context.Context, genre string) (CategoryFilterPanel, error)
+	CategoryFilterPage(ctx context.Context, genre string, filterIDs []string, offset int, sessionID string, seenIDs []string) (CategoryFilterPage, error)
+}
+
+type CategoryFilterItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type CategoryFilterRow struct {
+	Type          string               `json:"type"`
+	Name          string               `json:"name"`
+	SelectionType int                  `json:"selectionType"`
+	Items         []CategoryFilterItem `json:"items"`
+}
+
+type CategoryFilterPanel struct {
+	Genre string              `json:"genre"`
+	Rows  []CategoryFilterRow `json:"rows"`
+}
+
+type CategoryFilterPage struct {
+	Items      []Drama `json:"items"`
+	HasMore    bool    `json:"hasMore"`
+	NextOffset int     `json:"nextOffset"`
+	SessionID  string  `json:"sessionId"`
+}
+
 type Suggester interface {
 	Suggestions(ctx context.Context, query string) ([]string, error)
 }

@@ -41,6 +41,7 @@ var moduleCapabilityTypes = map[string][]reflect.Type{
 	"cover":           {reflect.TypeFor[CoverResolver]()},
 	"metadata":        {reflect.TypeFor[MetadataEnricher]()},
 	"catalogState":    {reflect.TypeFor[CatalogStateful]()},
+	"categoryFilters": {reflect.TypeFor[CategoryFilterer]()},
 	"mediaAuth":       {reflect.TypeFor[MediaAuthorizer]()},
 }
 
