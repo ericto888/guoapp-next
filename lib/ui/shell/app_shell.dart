@@ -88,7 +88,6 @@ class _AppShellState extends State<AppShell> {
   final _televisionTabs = GlobalKey();
   final _explore = GlobalKey<ExplorePageState>();
   var _tab = AppTab.explore;
-  late String _source;
   var _headerFocused = false;
   FocusNode? _lastFocus;
   Timer? _exitWindow;
@@ -102,7 +101,6 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _source = widget.store.source;
     widget.store.addListener(_storeChanged);
     FocusManager.instance.addListener(_followFocus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -158,7 +156,6 @@ class _AppShellState extends State<AppShell> {
   void _storeChanged() {
     final source = widget.store.source;
     if (!mounted) return;
-    _source = source;
     setState(() {
       if ((!SourceSite.isAvailable(hongguoFindSourceId) ||
               !widget.store.findDramaTab) &&
