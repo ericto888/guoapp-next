@@ -64,8 +64,9 @@ class ExploreFeed extends ChangeNotifier {
   ];
 
   String _boardGenre(RankingBoard board) {
-    final match = RegExp(r'^hongguo-native-(all|human|comic|ai)-')
-        .firstMatch(board.id);
+    final match = RegExp(
+      r'^hongguo-native-(all|human|comic|ai)-',
+    ).firstMatch(board.id);
     if (match != null) return match.group(1)!;
     if (board.name.startsWith('真人剧')) return 'human';
     if (board.name.startsWith('漫剧')) return 'comic';

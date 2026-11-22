@@ -548,8 +548,9 @@ class SettingsSection extends StatelessWidget {
     if (opened) return;
     await Clipboard.setData(ClipboardData(text: url));
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('无法打开浏览器，链接已复制')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法打开浏览器，链接已复制')));
     }
   }
 
@@ -617,8 +618,9 @@ class _BackupCardState extends State<_BackupCard> {
       if (mounted) setState(() => _busy = false);
     }
     if (message != null && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -691,8 +693,9 @@ class _RenderingTileState extends State<_RenderingTile> {
     );
     if (accepted != true || !mounted) return;
     if (!await AppDevice.setCompatibleRendering(enabled) && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('兼容渲染模式未能保存，请重试')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('兼容渲染模式未能保存，请重试')));
     }
   }
 
@@ -714,8 +717,9 @@ class _Note extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 16),
     child: Text(
       text,
-      style: Theme.of(context).textTheme.bodyMedium
-          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
     ),
   );
 }
