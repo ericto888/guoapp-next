@@ -351,7 +351,7 @@ class _AppShellState extends State<AppShell> {
                         final entry = switch (_tab) {
                           AppTab.follow => _followEntry,
                           AppTab.mine => _mineEntry,
-                          AppTab.explore || AppTab.history => null,
+                          AppTab.explore || AppTab.find || AppTab.history => null,
                         };
                         if (event is KeyUpEvent ||
                             event.logicalKey != LogicalKeyboardKey.arrowDown ||
