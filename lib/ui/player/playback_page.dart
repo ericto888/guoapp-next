@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -192,11 +193,14 @@ class _PlaybackPageState extends State<PlaybackPage> {
     if (!mounted) return;
     final session = _session;
     final playing = session.player.state.playing;
+    final iosVideo = Platform.isIOS &&
+        (session.ready && session.aspectKnown || _pip.active);
     _pip.update(
       aspectRatio: session.aspectRatio,
       playing: playing,
       hasPrevious: session.hasPrevious,
       hasNext: session.hasNext,
+      iosPlayer: iosVideo ? session.player : null,
       autoEnter:
           playing &&
           !_television &&
@@ -224,6 +228,10 @@ class _PlaybackPageState extends State<PlaybackPage> {
 
   void _action(String action) {
     switch (action) {
+      case 'play':
+        if (!_session.player.state.playing) _session.togglePlayback();
+      case 'pause':
+        if (_session.player.state.playing) _session.togglePlayback();
       case 'toggle':
         _session.togglePlayback();
       case 'previous':
