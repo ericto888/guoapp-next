@@ -1011,13 +1011,47 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (session.danmakuSupported)
+              InkWell(
+                onTap: () => unawaited(session.toggleDanmaku()),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        session.danmakuEnabled
+                            ? Icons.subtitles_rounded
+                            : Icons.subtitles_off_rounded,
+                        size: 16,
+                        color: session.danmakuEnabled
+                            ? const Color(0xFFFF9800)
+                            : Colors.white.withValues(alpha: .72),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        session.danmakuEnabled ? '弹幕已开' : '弹幕已关',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             Text(
               drama.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 height: 1.3,
                 shadows: [Shadow(color: Color(0x88000000), blurRadius: 4)],
@@ -1201,29 +1235,21 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     final position = (_seekValue ?? state.position.inMilliseconds.toDouble())
         .clamp(0.0, max);
     final dragging = _dragging;
-    final colors = Theme.of(context).colorScheme;
-    final widePortrait = _keepWidePortraitChrome;
-    // 横片竖持采用红果风格的深色细进度条；原生竖片保留主题色样式。
-    const hongguoTrack = Color(0xFF383838);
-    const hongguoBuffered = Color(0xFF666666);
+    // 竖屏播放器统一使用深色细进度条与白色滑块，横片和原生竖片保持一致。
+    const portraitTrack = Color(0xFF383838);
+    const portraitBuffered = Color(0xFF666666);
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
-        trackHeight: widePortrait ? (dragging ? 4 : 2) : (dragging ? 6 : 3),
+        trackHeight: dragging ? 4 : 2,
         padding: EdgeInsets.zero,
-        activeTrackColor: widePortrait
-            ? (state.playing ? hongguoTrack : const Color(0xFFEF6C00))
-            : colors.primary,
-        thumbColor: widePortrait ? Colors.white : colors.primary,
-        inactiveTrackColor: widePortrait
-            ? hongguoTrack
-            : Colors.white.withValues(alpha: .25),
-        secondaryActiveTrackColor: widePortrait
-            ? hongguoBuffered
-            : Colors.white.withValues(alpha: .4),
+        activeTrackColor: state.playing
+            ? portraitTrack
+            : const Color(0xFFEF6C00),
+        thumbColor: Colors.white,
+        inactiveTrackColor: portraitTrack,
+        secondaryActiveTrackColor: portraitBuffered,
         thumbShape: RoundSliderThumbShape(
-          enabledThumbRadius: widePortrait
-              ? (dragging ? 5 : 3)
-              : (dragging ? 10 : 6),
+          enabledThumbRadius: dragging ? 5 : 3,
         ),
         overlayShape: SliderComponentShape.noOverlay,
         trackShape: const RoundedRectSliderTrackShape(),
