@@ -23,7 +23,12 @@ CatalogCategory _findRankingTab(RankingBoard board) {
 }
 
 class ExploreFeed extends ChangeNotifier {
-  ExploreFeed(this.repository, this.store, {this.rankingMode = false, this.sourceId}) {
+  ExploreFeed(
+    this.repository,
+    this.store, {
+    this.rankingMode = false,
+    this.sourceId,
+  }) {
     store.addListener(_storeChanged);
     repository.catalogUpdates.addListener(_metadataChanged);
     _open();
@@ -48,9 +53,8 @@ class ExploreFeed extends ChangeNotifier {
   bool get recommending => _tab.id == recommendTab.id;
 
   bool get groupedRankings =>
-      _catalog?.boards.any(
-        (board) => board.id.startsWith('hongguo-native-'),
-      ) == true;
+      _catalog?.boards.any((board) => board.id.startsWith('hongguo-native-')) ==
+      true;
 
   List<CatalogCategory> get genreTabs => const [
     CatalogCategory('all', '全部'),
@@ -89,9 +93,7 @@ class ExploreFeed extends ChangeNotifier {
       final bKey = b.id.split('-').last;
       final ai = order.indexOf(aKey);
       final bi = order.indexOf(bKey);
-      return (ai < 0 ? order.length : ai).compareTo(
-        bi < 0 ? order.length : bi,
-      );
+      return (ai < 0 ? order.length : ai).compareTo(bi < 0 ? order.length : bi);
     });
     return boards;
   }
@@ -136,7 +138,11 @@ class ExploreFeed extends ChangeNotifier {
 
   WatchEntry? get resume {
     final source = this.source;
-    if (source == null || rankingMode || tabs.isEmpty || _tab.id != tabs.first.id) return null;
+    if (source == null ||
+        rankingMode ||
+        tabs.isEmpty ||
+        _tab.id != tabs.first.id)
+      return null;
     return store.history
         .where((entry) => entry.drama.source == source.id)
         .firstOrNull;

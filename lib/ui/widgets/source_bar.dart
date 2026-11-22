@@ -47,7 +47,12 @@ class SourceBar extends StatelessWidget {
     return switch (form) {
       FormFactor.phone => PageHeader(
         title: source,
-        actions: [...leading, if (showSourceSwitcher) switcher, search, ...actions],
+        actions: [
+          ...leading,
+          if (showSourceSwitcher) switcher,
+          search,
+          ...actions,
+        ],
       ),
       FormFactor.pad || FormFactor.window => PageHeader(
         title: source,

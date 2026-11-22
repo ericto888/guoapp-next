@@ -160,7 +160,8 @@ class _AppShellState extends State<AppShell> {
     if (!mounted) return;
     _source = source;
     setState(() {
-      if ((!SourceSite.isAvailable(hongguoFindSourceId) || !widget.store.findDramaTab) &&
+      if ((!SourceSite.isAvailable(hongguoFindSourceId) ||
+              !widget.store.findDramaTab) &&
           _tab == AppTab.find) {
         _tab = AppTab.explore;
       }
@@ -174,8 +175,8 @@ class _AppShellState extends State<AppShell> {
           widget.store.historyTab && !AppScope.of(context).television,
         AppTab.find =>
           SourceSite.isAvailable(hongguoFindSourceId) &&
-          widget.store.findDramaTab &&
-          !AppScope.of(context).television,
+              widget.store.findDramaTab &&
+              !AppScope.of(context).television,
         AppTab.explore || AppTab.follow || AppTab.mine => true,
       })
         tab,
@@ -367,7 +368,9 @@ class _AppShellState extends State<AppShell> {
                         final entry = switch (_tab) {
                           AppTab.follow => _followEntry,
                           AppTab.mine => _mineEntry,
-                          AppTab.explore || AppTab.find || AppTab.history => null,
+                          AppTab.explore ||
+                          AppTab.find ||
+                          AppTab.history => null,
                         };
                         if (event is KeyUpEvent ||
                             event.logicalKey != LogicalKeyboardKey.arrowDown ||

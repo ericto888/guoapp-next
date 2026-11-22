@@ -117,9 +117,8 @@ class _ModulesPageState extends State<ModulesPage>
 
   void _show(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -672,9 +671,8 @@ class _IndexCard extends StatelessWidget {
         if (entry.store.isNotEmpty)
           Text(
             '来源：${entry.store}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: colors.onSurfaceVariant),
           ),
         if (entry.description.isNotEmpty) Text(entry.description),
         if (records != null)

@@ -101,9 +101,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     _idleTimer?.cancel();
     if (_immersive) {
       unawaited(
-        SystemChrome.setEnabledSystemUIMode(
-          SystemUiMode.edgeToEdge,
-        ).catchError((Object _) {}),
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge)
+            .catchError((Object _) {}),
       );
     }
     _pages.dispose();
@@ -463,7 +462,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     DramaSeason? picked;
     await showPlayerSheet(
       context,
-      (_) => SeasonSheet(session: _session, onSeason: (season) => picked = season),
+      (_) =>
+          SeasonSheet(session: _session, onSeason: (season) => picked = season),
     );
     if (!mounted) return;
     if (picked case final season?) {
@@ -477,9 +477,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   void _saveFailed() {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('播放偏好未能保存，请重试')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('播放偏好未能保存，请重试')));
   }
 
   @override
@@ -559,7 +558,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           if (!waiting)
             ClipRect(
               child: Transform.translate(
-                offset: session.videoSize != null &&
+                offset:
+                    session.videoSize != null &&
                         session.videoSize!.width >= session.videoSize!.height
                     ? const Offset(0, -40)
                     : Offset.zero,
@@ -661,7 +661,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     final widePortrait = _keepWidePortraitChrome;
     final video = session.videoSize;
     final screen = MediaQuery.sizeOf(context);
-    final fullscreenTop = widePortrait && widget.onFullscreen != null && video != null
+    final fullscreenTop =
+        widePortrait && widget.onFullscreen != null && video != null
         ? (() {
             final fitted = session.videoFit.size(
               screen,
@@ -815,11 +816,18 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                     borderRadius: BorderRadius.circular(16),
                     onTap: widget.onFullscreen,
                     child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.fullscreen_rounded, size: 17, color: Colors.white),
+                          Icon(
+                            Icons.fullscreen_rounded,
+                            size: 17,
+                            color: Colors.white,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             '全屏观看',
@@ -1088,7 +1096,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 ),
                 if (description.length > 20)
                   TextButton(
-                    onPressed: () => setState(() => _descExpanded = !_descExpanded),
+                    onPressed: () =>
+                        setState(() => _descExpanded = !_descExpanded),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
                       visualDensity: VisualDensity.compact,
@@ -1161,10 +1170,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           ),
           itemBuilder: (context) => [
             for (final speed in playbackSpeeds)
-              PopupMenuItem<double>(
-                value: speed,
-                child: Text('${speed}x'),
-              ),
+              PopupMenuItem<double>(value: speed, child: Text('${speed}x')),
           ],
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1248,9 +1254,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         thumbColor: Colors.white,
         inactiveTrackColor: portraitTrack,
         secondaryActiveTrackColor: portraitBuffered,
-        thumbShape: RoundSliderThumbShape(
-          enabledThumbRadius: dragging ? 5 : 3,
-        ),
+        thumbShape: RoundSliderThumbShape(enabledThumbRadius: dragging ? 5 : 3),
         overlayShape: SliderComponentShape.noOverlay,
         trackShape: const RoundedRectSliderTrackShape(),
       ),
@@ -1518,7 +1522,9 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
                     ? Padding(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                         child: Material(
-                          color: colors.surfaceContainerHighest.withValues(alpha: .55),
+                          color: colors.surfaceContainerHighest.withValues(
+                            alpha: .55,
+                          ),
                           borderRadius: BorderRadius.circular(12),
                           clipBehavior: Clip.antiAlias,
                           child: InkWell(
@@ -1529,23 +1535,45 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
                             child: SizedBox(
                               height: 44,
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.layers_rounded, size: 18, color: colors.primary),
+                                    Icon(
+                                      Icons.layers_rounded,
+                                      size: 18,
+                                      color: colors.primary,
+                                    ),
                                     const SizedBox(width: 8),
                                     Text(
                                       _session.detail.seasons
-                                              .where((season) => season.drama.id == _session.detail.drama.id)
+                                              .where(
+                                                (season) =>
+                                                    season.drama.id ==
+                                                    _session.detail.drama.id,
+                                              )
                                               .map((season) => season.label)
                                               .firstOrNull ??
                                           '系列多季',
-                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                     const Spacer(),
-                                    Text('共 ${_session.detail.seasons.length} 季', style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant)),
+                                    Text(
+                                      '共 ${_session.detail.seasons.length} 季',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                    ),
                                     const SizedBox(width: 6),
-                                    Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
+                                    Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colors.onSurfaceVariant,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1574,7 +1602,6 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
     );
   }
 }
-
 
 class SeasonSheet extends StatelessWidget {
   const SeasonSheet({super.key, required this.session, required this.onSeason});

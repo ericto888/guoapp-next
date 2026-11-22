@@ -152,12 +152,12 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     if (generation != _filterGeneration) {
       throw AppFailure('筛选条件已更新');
     }
-    final items = [
-      for (final item in result.items) Drama.fromJson(item),
-    ];
+    final items = [for (final item in result.items) Drama.fromJson(item)];
     _filterOffset = result.nextOffset;
     _filterSessionId = result.sessionId;
-    _seenIds.addAll(items.map((item) => item.sourceId.isNotEmpty ? item.sourceId : item.id));
+    _seenIds.addAll(
+      items.map((item) => item.sourceId.isNotEmpty ? item.sourceId : item.id),
+    );
     return CatalogPage(items, hasMore: result.hasMore, page: page);
   }
 
@@ -215,7 +215,9 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
 
   void _removeFilter(String type, String id) {
     if (type == 'genre') {
-      final row = _panel?.rows.where((item) => item.type == 'genre').firstOrNull;
+      final row = _panel?.rows
+          .where((item) => item.type == 'genre')
+          .firstOrNull;
       if (row != null) {
         _selectFilter(row, const CategoryFilterItem(id: '', name: '全部'));
       }
@@ -241,11 +243,14 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     unawaited(_loadPanel());
   }
 
-  List<({String type, String id, String name})> _picks(CategoryFilterPanel panel) {
+  List<({String type, String id, String name})> _picks(
+    CategoryFilterPanel panel,
+  ) {
     final result = <({String type, String id, String name})>[];
     for (final row in panel.rows) {
       for (final id in _selected[row.type] ?? const <String>{}) {
-        final name = row.items.where((item) => item.id == id).firstOrNull?.name ??
+        final name =
+            row.items.where((item) => item.id == id).firstOrNull?.name ??
             _selectedNames[id] ??
             '';
         if (name.isNotEmpty) result.add((type: row.type, id: id, name: name));
@@ -335,7 +340,11 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
                               showScore: false,
                               exploreBlur: true,
                               onTap: () => widget.onOpen(top[index]),
-                              onMore: () => quickFollow(context, widget.store, top[index]),
+                              onMore: () => quickFollow(
+                                context,
+                                widget.store,
+                                top[index],
+                              ),
                             ),
                             childCount: top.length,
                           ),
@@ -356,7 +365,8 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
                               drama: drama,
                               rank: explore.rankOf(drama) ?? index + 4,
                               onTap: () => widget.onOpen(drama),
-                              onMore: () => quickFollow(context, widget.store, drama),
+                              onMore: () =>
+                                  quickFollow(context, widget.store, drama),
                             );
                           },
                         ),
@@ -473,12 +483,15 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
                             items: current.items,
                             exploreBlur: true,
                             onOpen: widget.onOpen,
-                            onMore: (drama) => quickFollow(context, widget.store, drama),
+                            onMore: (drama) =>
+                                quickFollow(context, widget.store, drama),
                           ),
                         ),
                       SliverPadding(
                         padding: EdgeInsets.fromLTRB(inset, 8, inset, 24),
-                        sliver: SliverToBoxAdapter(child: FeedFooter(feed: current)),
+                        sliver: SliverToBoxAdapter(
+                          child: FeedFooter(feed: current),
+                        ),
                       ),
                     ],
                   ),
@@ -489,12 +502,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
         else
           const StatusView.loading(),
         if (_mode == _filterMode && _collapsed && _panel != null)
-          Positioned(
-            top: 4,
-            left: 12,
-            right: 12,
-            child: _stickyBar(),
-          ),
+          Positioned(top: 4, left: 12, right: 12, child: _stickyBar()),
       ],
     );
   }
@@ -520,29 +528,41 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
           if (genreRow != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-              child: _filterChips(
-                genreRow,
-                [const CategoryFilterItem(id: '', name: '全部'), ...genreRow.items],
-              ),
+              child: _filterChips(genreRow, [
+                const CategoryFilterItem(id: '', name: '全部'),
+                ...genreRow.items,
+              ]),
             ),
           for (final row in rows)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
-              child: _filterChips(
-                row,
-                [const CategoryFilterItem(id: '', name: '全部'), ...row.items],
-              ),
+              child: _filterChips(row, [
+                const CategoryFilterItem(id: '', name: '全部'),
+                ...row.items,
+              ]),
             ),
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 4, 8, 4),
             child: Row(
               children: [
-                Text('已选', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
+                Text(
+                  '已选',
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: picks.isEmpty
-                      ? Text('全部剧集', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13))
+                      ? Text(
+                          '全部剧集',
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        )
                       : SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: Row(
@@ -552,7 +572,8 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
                                   padding: const EdgeInsets.only(right: 6),
                                   child: InputChip(
                                     label: Text(pick.name),
-                                    onDeleted: () => _removeFilter(pick.type, pick.id),
+                                    onDeleted: () =>
+                                        _removeFilter(pick.type, pick.id),
                                     visualDensity: VisualDensity.compact,
                                   ),
                                 ),
@@ -573,10 +594,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     );
   }
 
-  Widget _filterChips(
-    CategoryFilterRow row,
-    List<CategoryFilterItem> items,
-  ) {
+  Widget _filterChips(CategoryFilterRow row, List<CategoryFilterItem> items) {
     final selected = _selected[row.type] ?? const <String>{};
     final allItem = items.firstWhere(
       (item) => item.id.isEmpty,
@@ -586,15 +604,25 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     final label = row.name.trim().isEmpty ? '全部' : '全部${row.name}';
     Widget chip(CategoryFilterItem item) => row.singleChoice
         ? ChoiceChip(
-            label: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            selected: selected.contains(item.id) ||
+            label: Text(
+              item.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            selected:
+                selected.contains(item.id) ||
                 (item.id.isEmpty && selected.isEmpty),
             onSelected: (_) => _selectFilter(row, item),
             visualDensity: VisualDensity.compact,
           )
         : FilterChip(
-            label: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            selected: selected.contains(item.id) ||
+            label: Text(
+              item.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            selected:
+                selected.contains(item.id) ||
                 (item.id.isEmpty && selected.isEmpty),
             onSelected: (_) => _selectFilter(row, item),
             visualDensity: VisualDensity.compact,
@@ -609,13 +637,21 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
               alignment: Alignment.centerLeft,
               child: row.singleChoice
                   ? ChoiceChip(
-                      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      label: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       selected: selected.isEmpty,
                       onSelected: (_) => _selectFilter(row, allItem),
                       visualDensity: VisualDensity.compact,
                     )
                   : FilterChip(
-                      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      label: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       selected: selected.isEmpty,
                       onSelected: (_) => _selectFilter(row, allItem),
                       visualDensity: VisualDensity.compact,
@@ -646,7 +682,9 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     final panel = _panel!;
     final picks = _picks(panel);
     final colors = Theme.of(context).colorScheme;
-    final title = picks.isEmpty ? '全部剧集' : picks.map((pick) => pick.name).join(' · ');
+    final title = picks.isEmpty
+        ? '全部剧集'
+        : picks.map((pick) => pick.name).join(' · ');
     return Material(
       elevation: 5,
       color: colors.surfaceContainer,
@@ -673,9 +711,18 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
               ),
               if (picks.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(color: colors.primary, borderRadius: BorderRadius.circular(12)),
-                  child: Text('${picks.length}', style: TextStyle(color: colors.onPrimary, fontSize: 11)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${picks.length}',
+                    style: TextStyle(color: colors.onPrimary, fontSize: 11),
+                  ),
                 ),
               const SizedBox(width: 8),
               const Icon(Icons.expand_more_rounded, size: 18),
@@ -744,7 +791,12 @@ class _RankListRow extends StatelessWidget {
             SizedBox(
               width: 62,
               height: 90,
-              child: DramaCover(drama: drama, details: false, radius: 8, exploreBlur: true),
+              child: DramaCover(
+                drama: drama,
+                details: false,
+                radius: 8,
+                exploreBlur: true,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -752,7 +804,15 @@ class _RankListRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(drama.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  Text(
+                    drama.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
                   const SizedBox(height: 7),
                   Text(
                     [
@@ -762,11 +822,22 @@ class _RankListRow extends StatelessWidget {
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.onSurfaceVariant,
+                    ),
                   ),
                   if (drama.description.isNotEmpty) ...[
                     const SizedBox(height: 5),
-                    Text(drama.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+                    Text(
+                      drama.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ],
               ),

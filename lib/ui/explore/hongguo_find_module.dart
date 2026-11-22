@@ -43,17 +43,18 @@ class _HongguoFindModuleState extends State<HongguoFindModule> {
     super.dispose();
   }
 
-  void _open(Drama drama) => Navigator.of(
-    context,
-    rootNavigator: switch (AppScope.formFactorOf(context)) {
-      FormFactor.phone || FormFactor.television => true,
-      FormFactor.pad || FormFactor.window => false,
-    },
-  ).push(
-    MaterialPageRoute<void>(
-      builder: (_) => DetailPage(store: widget.store, drama: drama),
-    ),
-  );
+  void _open(Drama drama) =>
+      Navigator.of(
+        context,
+        rootNavigator: switch (AppScope.formFactorOf(context)) {
+          FormFactor.phone || FormFactor.television => true,
+          FormFactor.pad || FormFactor.window => false,
+        },
+      ).push(
+        MaterialPageRoute<void>(
+          builder: (_) => DetailPage(store: widget.store, drama: drama),
+        ),
+      );
 
   void _searchSubmitted(SourceSite source, String query) {
     if (query.trim().isEmpty) return;
@@ -67,7 +68,8 @@ class _HongguoFindModuleState extends State<HongguoFindModule> {
     builder: (context, _) {
       final explore = _explore!;
       final source = explore.source;
-      final television = AppScope.formFactorOf(context) == FormFactor.television;
+      final television =
+          AppScope.formFactorOf(context) == FormFactor.television;
       if (source == null) {
         return const Scaffold(
           body: StatusView(

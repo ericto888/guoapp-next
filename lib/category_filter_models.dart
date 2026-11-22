@@ -4,7 +4,13 @@ class CategoryFilterItem {
   factory CategoryFilterItem.fromJson(Map<String, dynamic> json) =>
       CategoryFilterItem(
         id: (json['id'] ?? json['value'] ?? json['key'])?.toString() ?? '',
-        name: (json['name'] ?? json['label'] ?? json['title'] ?? json['valueName'])?.toString() ?? '',
+        name:
+            (json['name'] ??
+                    json['label'] ??
+                    json['title'] ??
+                    json['valueName'])
+                ?.toString() ??
+            '',
       );
 
   final String id;
@@ -21,11 +27,33 @@ class CategoryFilterRow {
 
   factory CategoryFilterRow.fromJson(Map<String, dynamic> json) =>
       CategoryFilterRow(
-        type: (json['type'] ?? json['key'] ?? json['field'] ?? json['filterType'] ?? json['filter_type'])?.toString() ?? '',
-        name: (json['name'] ?? json['label'] ?? json['title'] ?? json['fieldName'] ?? json['field_name'])?.toString() ?? '',
-        selectionType: _categoryFilterInt(json['selectionType'] ?? json['selection_type']),
+        type:
+            (json['type'] ??
+                    json['key'] ??
+                    json['field'] ??
+                    json['filterType'] ??
+                    json['filter_type'])
+                ?.toString() ??
+            '',
+        name:
+            (json['name'] ??
+                    json['label'] ??
+                    json['title'] ??
+                    json['fieldName'] ??
+                    json['field_name'])
+                ?.toString() ??
+            '',
+        selectionType: _categoryFilterInt(
+          json['selectionType'] ?? json['selection_type'],
+        ),
         items: [
-          for (final value in (json['items'] ?? json['options'] ?? json['values'] ?? json['list']) as List? ?? const [])
+          for (final value
+              in (json['items'] ??
+                          json['options'] ??
+                          json['values'] ??
+                          json['list'])
+                      as List? ??
+                  const [])
             if (value is Map)
               CategoryFilterItem.fromJson(Map<String, dynamic>.from(value)),
         ],
@@ -48,7 +76,13 @@ class CategoryFilterPanel {
       CategoryFilterPanel(
         genre: json['genre']?.toString() ?? '',
         rows: [
-          for (final value in (json['rows'] ?? json['filters'] ?? json['filterList'] ?? json['filter_list']) as List? ?? const [])
+          for (final value
+              in (json['rows'] ??
+                          json['filters'] ??
+                          json['filterList'] ??
+                          json['filter_list'])
+                      as List? ??
+                  const [])
             if (value is Map)
               CategoryFilterRow.fromJson(Map<String, dynamic>.from(value)),
         ],

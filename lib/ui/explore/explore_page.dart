@@ -172,8 +172,7 @@ class ExplorePageState extends State<ExplorePage> {
         child: CategoryTabs<String>(
           key: _tabsKey,
           options: [
-            for (final tab in explore.tabs)
-              ChoiceOption(tab.id, tab.name),
+            for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name),
           ],
           selected: explore.tab.id,
           onSelected: _selectTab,
