@@ -240,7 +240,7 @@ class _TelevisionPlayerPageState extends State<TelevisionPlayerPage>
     if (_session.danmakuSupported) _danmaku,
     _speed,
     _quality,
-    _fit,
+    if (!_session.audio) _fit,
   ];
 
   bool _enabled(FocusNode node) =>
@@ -591,15 +591,16 @@ class _TelevisionPlayerPageState extends State<TelevisionPlayerPage>
                   () => _openMenu(_Menu.quality),
                 ),
               ),
-              CompositedTransformTarget(
-                link: _links[_Menu.fit]!,
-                child: _pill(
-                  _fit,
-                  '比例 ${_session.videoFit.label}',
-                  '画面比例',
-                  () => _openMenu(_Menu.fit),
+              if (!_session.audio)
+                CompositedTransformTarget(
+                  link: _links[_Menu.fit]!,
+                  child: _pill(
+                    _fit,
+                    '比例 ${_session.videoFit.label}',
+                    '画面比例',
+                    () => _openMenu(_Menu.fit),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
