@@ -70,7 +70,7 @@ class ExploreFeed extends ChangeNotifier {
 
   bool _boardMatchesGenre(RankingBoard board) {
     final id = board.id.toLowerCase();
-    final name = board.name.replaceAll(RegExp(r'\\s+'), '');
+    final name = board.name.replaceAll(RegExp(r'\s+'), '');
     return switch (_genre.id) {
       '' => id.contains('hot') && !id.contains('real') &&
           !id.contains('comic') && !id.contains('ai'),
