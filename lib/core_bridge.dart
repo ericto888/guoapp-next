@@ -970,8 +970,12 @@ class NativeRepository extends AppRepository {
     List<String> seenIds = const [],
   }) async {
     _authorize(source);
+    // Keep the native read-session scope stable and ASCII-safe. Filter IDs
+    // belong in the request payload, never in the session marker: joining
+    // multiple IDs introduces commas (and can exceed the native 128-char
+    // marker limit), which makes validNativeRead reject the request.
     final result = await _read(
-      'categoryFilterPage-$source-$genre-${filterIds.join(',')}',
+      'categoryFilterPage-$source-$genre',
       {
         'action': 'categoryFilterPage',
         'source': source,
