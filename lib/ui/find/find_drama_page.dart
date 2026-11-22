@@ -138,8 +138,9 @@ class FindDramaPageState extends State<FindDramaPage> {
   }
 
   String _genreFor(ExploreFeed explore) => switch (explore.genre.id) {
-    'series' || 'short_play' || 'comic_series' || 'ai_series' =>
-      explore.genre.id,
+    // 红果多维筛选接口不支持应用内的“系列剧”聚合标签；
+    // 仅传递红果原生支持的三种剧种，其他情况按全部剧种请求。
+    'short_play' || 'comic_series' || 'ai_series' => explore.genre.id,
     _ => '',
   };
 
