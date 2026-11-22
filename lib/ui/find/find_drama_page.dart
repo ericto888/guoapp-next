@@ -418,6 +418,7 @@ class FindDramaPageState extends State<FindDramaPage> {
                   onSwitchSource: (anchor) => pickSource(anchor, widget.store),
                   onOpenSearch: () => openSearch(context, widget.store, source),
                   onSearchSubmitted: (query) => _searchSubmitted(source, query),
+                  showSwitcher: false,
                 ),
               Padding(
                 padding: EdgeInsets.fromLTRB(inset, 8, inset, 4),
