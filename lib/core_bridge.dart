@@ -970,15 +970,18 @@ class NativeRepository extends AppRepository {
     List<String> seenIds = const [],
   }) async {
     _authorize(source);
-    final result = await _read('categoryFilterPage-$source-$genre-${filterIds.join(',')}', {
-      'action': 'categoryFilterPage',
-      'source': source,
-      'genre': genre,
-      'filterIds': filterIds,
-      'offset': offset,
-      'filterSessionId': sessionId,
-      'seenIds': seenIds,
-    });
+    final result = await _read(
+      'categoryFilterPage-$source-$genre-${filterIds.join(',')}',
+      {
+        'action': 'categoryFilterPage',
+        'source': source,
+        'genre': genre,
+        'filterIds': filterIds,
+        'offset': offset,
+        'filterSessionId': sessionId,
+        'seenIds': seenIds,
+      },
+    );
     return CategoryFilterPage.fromJson(result);
   }
 

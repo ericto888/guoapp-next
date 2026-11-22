@@ -124,9 +124,10 @@ class _PlayerLockOverlayState extends State<PlayerLockOverlay> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              for (final alignment in widget.alignments.isEmpty
-                  ? [widget.alignment ?? Alignment.center]
-                  : widget.alignments)
+              for (final alignment
+                  in widget.alignments.isEmpty
+                      ? [widget.alignment ?? Alignment.center]
+                      : widget.alignments)
                 Align(
                   alignment: alignment,
                   child: IgnorePointer(

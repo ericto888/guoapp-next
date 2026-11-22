@@ -165,9 +165,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       }
       unawaited(AppDevice.releaseOrientation());
       unawaited(
-        SystemChrome.setEnabledSystemUIMode(
-          SystemUiMode.edgeToEdge,
-        ).catchError((Object _) {}),
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge)
+            .catchError((Object _) {}),
       );
     }
     super.dispose();
@@ -466,9 +465,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
 
   void _saveFailed() {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('播放偏好未能保存，请重试')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('播放偏好未能保存，请重试')));
   }
 
   Future<void> _change(Future<void> Function() change) async {
@@ -1812,139 +1810,136 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           return Column(
             children: [
               SizedBox(
-                                      width: constraints.maxWidth,
-                                      height: videoHeight,
-                                      child: Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          if (player != null)
-                                            _heldVideoSurface(
-                                              session,
-                                              player,
-                                              Size(constraints.maxWidth, videoHeight),
-                                            )
-                                          else
-                                            IgnorePointer(
-                                              child: Center(
-                                                child: Text(
-                                                  '第 ${session.detail.episodes[index].number} 集',
-                                                  style: TextStyle(
-                                                    color: Colors.white.withValues(
-                                                      alpha: .72,
-                                                    ),
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          if (current) ...[
-                                            DanmakuOverlay(
-                                              controller: session.danmaku,
-                                              video: session.videoSize,
-                                              fit: session.videoFit,
-                                              style: session.danmakuStyle,
-                                            ),
-                                            IgnorePointer(
-                                              // 外层 Stack 是 StackFit.expand，直接放 Container 会被
-                                              // 紧约束拉成整个视频大小（圆形遮罩巨大），用 Center 撑住。
-                                              child: Center(
-                                                child: AnimatedScale(
-                                                  duration: Motion.short,
-                                                  scale: session.paused ? 1 : .8,
-                                                  child: AnimatedOpacity(
-                                                    duration: Motion.short,
-                                                    opacity: session.paused ? 1 : 0,
-                                                    child: Container(
-                                                      padding: const EdgeInsets.all(14),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.black.withValues(
-                                                          alpha: .45,
-                                                        ),
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: const Icon(
-                                                        Icons.play_arrow_rounded,
-                                                        color: Colors.white,
-                                                        size: 48,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            SwipeControls(
-                                              session: session,
-                                              enabled: false,
-                                              child: LayoutBuilder(
-                                                builder: (context, constraints) =>
-                                                    GestureDetector(
-                                                      behavior: HitTestBehavior.opaque,
-                                                      onTapUp: session.locked
-                                                          ? null
-                                                          : (details) => _tapUp(
-                                                              details,
-                                                              constraints.maxWidth,
-                                                              false,
-                                                            ),
-                                                      onLongPressStart: session.locked
-                                                          ? null
-                                                          : (_) => _pressStart(),
-                                                      onLongPressEnd: session.locked
-                                                          ? null
-                                                          : (_) => _pressEnd(),
-                                                      onLongPressCancel: session.locked
-                                                          ? null
-                                                          : _pressEnd,
-                                                    ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-              const SizedBox(height: 10),
-              _fullscreenPill(),
-              Expanded(child: _feed(context)),
-              // 底部进度条：所有页都占位（非当前页只隐藏不裁剪布局）。
-                        // 若用 if (current) 条件渲染，滑动换集完成瞬间进度条突然插入，
-                        // Column 里 Expanded 重新分配高度，整页内容会跳动一下。
-                        AnimatedOpacity(
-                          opacity: current && !_scrolling ? 1 : 0,
-                          duration: Motion.short,
-                          child: IgnorePointer(
-                            ignoring: !current,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
-                              child: PlaybackProgressBuilder(
-                                player: _session.player,
-                                builder: (context) {
-                                  // 红果样式：细白线。播放时整体压低对比度，暂停时高亮，
-                                  // 暂停态圆点略大，方便拖动。
-                                  final paused = _session.paused;
-                                  return SizedBox(
-                                    height: 22,
-                                    child: _progressBar(
-                                      context,
-                                      thumb: paused ? 4 : 3,
-                                      track: 2,
-                                      active: Colors.white.withValues(alpha: paused ? 1 : .4),
-                                      inactive: Colors.white.withValues(
-                                        alpha: paused ? .32 : .16,
-                                      ),
-                                      buffered: Colors.white.withValues(
-                                        alpha: paused ? .45 : .25,
-                                      ),
-                                      thumbColor: Colors.white.withValues(
-                                        alpha: paused ? 1 : .55,
-                                      ),
-                                    ),
-                                  );
-                                },
+                width: constraints.maxWidth,
+                height: videoHeight,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (player != null)
+                      _heldVideoSurface(
+                        session,
+                        player,
+                        Size(constraints.maxWidth, videoHeight),
+                      )
+                    else
+                      IgnorePointer(
+                        child: Center(
+                          child: Text(
+                            '第 ${session.detail.episodes[index].number} 集',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .72),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (current) ...[
+                      DanmakuOverlay(
+                        controller: session.danmaku,
+                        video: session.videoSize,
+                        fit: session.videoFit,
+                        style: session.danmakuStyle,
+                      ),
+                      IgnorePointer(
+                        // 外层 Stack 是 StackFit.expand，直接放 Container 会被
+                        // 紧约束拉成整个视频大小（圆形遮罩巨大），用 Center 撑住。
+                        child: Center(
+                          child: AnimatedScale(
+                            duration: Motion.short,
+                            scale: session.paused ? 1 : .8,
+                            child: AnimatedOpacity(
+                              duration: Motion.short,
+                              opacity: session.paused ? 1 : 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: .45),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 48,
+                                ),
                               ),
                             ),
                           ),
                         ),
+                      ),
+                      SwipeControls(
+                        session: session,
+                        enabled: false,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) => GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapUp: session.locked
+                                ? null
+                                : (details) => _tapUp(
+                                    details,
+                                    constraints.maxWidth,
+                                    false,
+                                  ),
+                            onLongPressStart: session.locked
+                                ? null
+                                : (_) => _pressStart(),
+                            onLongPressEnd: session.locked
+                                ? null
+                                : (_) => _pressEnd(),
+                            onLongPressCancel: session.locked
+                                ? null
+                                : _pressEnd,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              _fullscreenPill(),
+              Expanded(child: _feed(context)),
+              // 底部进度条：所有页都占位（非当前页只隐藏不裁剪布局）。
+              // 若用 if (current) 条件渲染，滑动换集完成瞬间进度条突然插入，
+              // Column 里 Expanded 重新分配高度，整页内容会跳动一下。
+              AnimatedOpacity(
+                opacity: current && !_scrolling ? 1 : 0,
+                duration: Motion.short,
+                child: IgnorePointer(
+                  ignoring: !current,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+                    child: PlaybackProgressBuilder(
+                      player: _session.player,
+                      builder: (context) {
+                        // 红果样式：细白线。播放时整体压低对比度，暂停时高亮，
+                        // 暂停态圆点略大，方便拖动。
+                        final paused = _session.paused;
+                        return SizedBox(
+                          height: 22,
+                          child: _progressBar(
+                            context,
+                            thumb: paused ? 4 : 3,
+                            track: 2,
+                            active: Colors.white.withValues(
+                              alpha: paused ? 1 : .4,
+                            ),
+                            inactive: Colors.white.withValues(
+                              alpha: paused ? .32 : .16,
+                            ),
+                            buffered: Colors.white.withValues(
+                              alpha: paused ? .45 : .25,
+                            ),
+                            thumbColor: Colors.white.withValues(
+                              alpha: paused ? 1 : .55,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
             ],
           );
         },
@@ -2129,9 +2124,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       ),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已复制剧名，可粘贴分享')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('已复制剧名，可粘贴分享')));
   }
 
   Widget _episodeBar(BuildContext context) {

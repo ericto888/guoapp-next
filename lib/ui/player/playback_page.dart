@@ -340,8 +340,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
             onFullscreen: () {},
             onMiniWindow: mini,
           ),
-        FormFactor.phone
-            when _wideVideo && !portraitStyle =>
+        FormFactor.phone when _wideVideo && !portraitStyle =>
           upstream.LandscapePlayerPage(
             store: widget.store,
             handle: widget.handle,
@@ -378,8 +377,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
           onFullscreen: () {},
           onMiniWindow: mini,
         ),
-      FormFactor.phone
-          when _wideVideo && !portraitStyle =>
+      FormFactor.phone when _wideVideo && !portraitStyle =>
         upstream.LandscapePlayerPage(
           store: widget.store,
           handle: widget.handle,

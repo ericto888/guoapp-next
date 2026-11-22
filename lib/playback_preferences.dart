@@ -141,6 +141,7 @@ class PlaybackPreferences {
   final bool hideSystemBars;
   final bool portraitStyleForWide;
   final bool autoPictureInPicture;
+
   /// Legacy shared value retained for older settings payloads.
   final VideoFit videoFit;
   final VideoFit portraitVideoFit;

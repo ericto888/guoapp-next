@@ -128,6 +128,7 @@ class DanmakuOverlay extends StatelessWidget {
   final VideoFit fit;
   final DanmakuStyle style;
   final double? topLimit;
+
   /// Vertical offset applied to the visible video's top edge.
   final double videoOffsetY;
 
