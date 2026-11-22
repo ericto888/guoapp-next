@@ -20,7 +20,7 @@ CatalogCategory _findRankingTab(RankingBoard board) {
     '',
   );
   if (name.isNotEmpty && !name.endsWith('榜')) {
-    name = '${name}榜';
+    name = '$name榜';
   }
   return CatalogCategory('app:rank:${board.id}', name);
 }
