@@ -42,7 +42,7 @@ bool playbackLayoutIsWide({
   required bool currentWide,
 }) => aspectKnown ? aspectRatio >= 1 : currentWide;
 
-class _PlaybackPageState extends State<PlaybackPage> {
+class _PlaybackPageState extends State<PlaybackPage> with WidgetsBindingObserver {
   final _padFullscreen = ValueNotifier(false);
   bool _windowFullscreen = false;
   final _pageScope = FocusScopeNode(debugLabel: 'playbackPage');
@@ -91,6 +91,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _wideVideo = _session.aspectKnown && _session.aspectRatio >= 1;
     _session.addListener(_changed);
     _padFullscreen.addListener(_padFullscreenChanged);
@@ -105,6 +106,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _session.removeListener(_changed);
     _pip.removeListener(_pipChanged);
     if (_pip.onAction == _action) _pip.onAction = null;
@@ -121,6 +123,19 @@ class _PlaybackPageState extends State<PlaybackPage> {
     unawaited(AppDevice.resetBrightness());
     widget.handle.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Settings may be changed while this playback route remains mounted.
+    // Refresh the native PiP auto-entry flag before iOS backgrounds the app,
+    // otherwise AVKit can retain the previous enabled value.
+    if (Platform.isIOS &&
+        (state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused ||
+            state == AppLifecycleState.resumed)) {
+      _sync();
+    }
   }
 
   void _changed() {
