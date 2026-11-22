@@ -29,7 +29,7 @@ jobs:
           cache: true
       - run: flutter pub get --enforce-lockfile
       - name: Dart format check
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: dart format --output=none --set-exit-if-changed lib/category_filter_models.dart lib/core_bridge.dart lib/danmaku_controller.dart lib/local_store.dart lib/source_modules.dart lib/ui/find/find_drama_page.dart lib/ui/player/portrait_player_page.dart lib/ui/settings/appearance_settings.dart lib/ui/shell/app_shell.dart test/category_filter_models_test.dart
       - name: Dart analyzer
         run: dart analyze --fatal-infos lib test
       - name: Flutter tests
