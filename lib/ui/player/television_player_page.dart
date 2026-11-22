@@ -514,7 +514,7 @@ class _TelevisionPlayerPageState extends State<TelevisionPlayerPage>
             children: [
               Expanded(
                 child: Text(
-                  '${_session.detail.drama.title} 第 ${_session.episode.number} 集',
+                  '${_session.detail.drama.title} ${_session.episode.label}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
