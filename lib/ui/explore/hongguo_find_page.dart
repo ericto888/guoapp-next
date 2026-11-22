@@ -604,10 +604,8 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       ...items.where((item) => item.id.isNotEmpty),
     ];
     final label = row.type == 'genre'
-        ? '全部主题'
-        : row.name.trim().isEmpty
-            ? '全部'
-            : '全部${row.name}';
+        ? '全部体裁'
+        : row.name.trim();
     Widget chip(CategoryFilterItem item) => row.singleChoice
         ? ChoiceChip(
             label: Text(
@@ -618,6 +616,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
             selected:
                 selected.contains(item.id) ||
                 (item.id.isEmpty && selected.isEmpty),
+            showCheckmark: false,
             onSelected: (_) => _selectFilter(row, item),
             visualDensity: VisualDensity.compact,
           )
@@ -630,6 +629,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
             selected:
                 selected.contains(item.id) ||
                 (item.id.isEmpty && selected.isEmpty),
+            showCheckmark: false,
             onSelected: (_) => _selectFilter(row, item),
             visualDensity: VisualDensity.compact,
           );
