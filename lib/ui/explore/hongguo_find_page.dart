@@ -9,7 +9,6 @@ import '../../explore_feed.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
-import '../theme/motion.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/drama_tile.dart';
@@ -504,7 +503,6 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
               child: _filterChips(
                 genreRow,
                 [const CategoryFilterItem(id: '', name: '全部'), ...genreRow.items],
-                inset: 0,
               ),
             ),
           for (final row in rows)
@@ -513,7 +511,6 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
               child: _filterChips(
                 row,
                 [const CategoryFilterItem(id: '', name: '全部'), ...row.items],
-                inset: 0,
               ),
             ),
           const Divider(height: 1),
@@ -558,9 +555,8 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
 
   Widget _filterChips(
     CategoryFilterRow row,
-    List<CategoryFilterItem> items, {
-    required double inset,
-  }) {
+    List<CategoryFilterItem> items,
+  ) {
     final colors = Theme.of(context).colorScheme;
     final selected = _selected[row.type] ?? const <String>{};
     return Row(
