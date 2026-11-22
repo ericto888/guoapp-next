@@ -11,6 +11,14 @@ import 'source_catalog.dart';
 
 const recommendTab = CatalogCategory('app:recommend', '推荐');
 
+const hongguoGenreTabs = <CatalogCategory>[
+  CatalogCategory.all,
+  CatalogCategory('series', '系列剧'),
+  CatalogCategory('short_play', '真人剧'),
+  CatalogCategory('comic_series', '漫剧'),
+  CatalogCategory('ai_series', 'AI剧'),
+];
+
 CatalogCategory rankingTab(RankingBoard board) =>
     CatalogCategory('app:rank:${board.id}', board.name);
 
@@ -24,6 +32,7 @@ class ExploreFeed extends ChangeNotifier {
   final LocalStore store;
   SourceCatalog? _catalog;
   CatalogCategory _tab = CatalogCategory.all;
+  CatalogCategory _genre = CatalogCategory.all;
   DramaFeed? _feed;
   Map<String, int> _ranks = const {};
   final _feeds = <String, DramaFeed>{};
@@ -33,11 +42,23 @@ class ExploreFeed extends ChangeNotifier {
   SourceSite? get source => _catalog?.source;
   DramaFeed? get feed => _feed;
   CatalogCategory get tab => _tab;
+  CatalogCategory get genre => _genre;
+  bool get usesHongguoGenreTabs => source?.id == 'hongguo-self';
+  List<CatalogCategory> get genreTabs =>
+      usesHongguoGenreTabs ? hongguoGenreTabs : categories;
+  List<CatalogCategory> get categories => _catalog?.categories ?? const [];
   bool get recommending => _tab.id == recommendTab.id;
 
   List<CatalogCategory> get tabs {
     final catalog = _catalog;
     if (catalog == null) return const [];
+    if (usesHongguoGenreTabs) {
+      return [
+        if (catalog.recommends) recommendTab,
+        for (final board in catalog.boards)
+          if (_boardMatchesGenre(board)) rankingTab(board),
+      ];
+    }
     final [all, ...genres] = catalog.categories;
     return [
       if (catalog.recommends) recommendTab,
@@ -45,6 +66,38 @@ class ExploreFeed extends ChangeNotifier {
       for (final board in catalog.boards) rankingTab(board),
       ...genres,
     ];
+  }
+
+  bool _boardMatchesGenre(RankingBoard board) {
+    final id = board.id.toLowerCase();
+    final name = board.name.replaceAll(RegExp(r'\\s+'), '');
+    return switch (_genre.id) {
+      '' => id.contains('hot') && !id.contains('real') &&
+          !id.contains('comic') && !id.contains('ai'),
+      'short_play' => id.contains('real') || name.contains('真人'),
+      'comic_series' => id.contains('comic') || name.contains('漫'),
+      'ai_series' => id.contains('ai') || name.contains('AI'),
+      'series' => id.contains('series') || name.contains('系列') || name.contains('新季'),
+      _ => false,
+    };
+  }
+
+  void selectGenre(String id) {
+    if (!usesHongguoGenreTabs || _genre.id == id) return;
+    final selected = genreTabs.where((item) => item.id == id).firstOrNull;
+    if (selected == null) return;
+    _genre = selected;
+    final nextTabs = tabs;
+    final next = nextTabs.where((item) => item.id == recommendTab.id).firstOrNull ??
+        nextTabs.firstOrNull;
+    if (next != null) {
+      _select(next);
+    } else {
+      _tab = CatalogCategory.all;
+      _feed = null;
+      _ranks = const {};
+      _notify();
+    }
   }
 
   int? rankOf(Drama drama) => _ranks[drama.id];
@@ -91,6 +144,7 @@ class ExploreFeed extends ChangeNotifier {
       return;
     }
     final catalog = _catalog = SourceCatalog(repository, SourceSite.byId(id));
+    _genre = CatalogCategory.all;
     _select(catalog.recommends ? recommendTab : CatalogCategory.all);
     unawaited(_loadCategories(catalog));
   }
@@ -110,9 +164,10 @@ class ExploreFeed extends ChangeNotifier {
     final catalog = _catalog!;
     if (recommending) unawaited(repository.cancelRecommendations());
     _tab = tab;
-    if (_feeds[tab.id] case final kept?) {
+    final feedKey = _feedKey(tab);
+    if (_feeds[feedKey] case final kept?) {
       _feed = kept;
-      _ranks = _rankings[tab.id] ?? const {};
+      _ranks = _rankings[feedKey] ?? const {};
       if (kept.items.isEmpty && !kept.loading) unawaited(kept.reload());
       _notify();
       return;
@@ -120,8 +175,8 @@ class ExploreFeed extends ChangeNotifier {
     final board = catalog.boards
         .where((board) => rankingTab(board).id == tab.id)
         .firstOrNull;
-    final ranks = _ranks = _rankings[tab.id] = <String, int>{};
-    final feed = _feed = _feeds[tab.id] = tab.id == recommendTab.id
+    final ranks = _ranks = _rankings[feedKey] = <String, int>{};
+    final feed = _feed = _feeds[feedKey] = tab.id == recommendTab.id
         ? DramaFeed(
             cumulative: true,
             load: (page, force) =>
@@ -141,6 +196,8 @@ class ExploreFeed extends ChangeNotifier {
     unawaited(feed.reload());
     _notify();
   }
+
+  String _feedKey(CatalogCategory tab) => '${_genre.id}|${tab.id}';
 
   Future<CatalogPage> _ranking(
     SourceCatalog catalog,
