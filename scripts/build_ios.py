@@ -128,7 +128,16 @@ def main():
             shutil.copy2(package, destination)
             artifacts.append(destination)
     else:
-        run([flutter, 'build', 'ios', '--release', '--no-codesign', '--no-pub', *app.flutter_arguments])
+        try:
+            run([flutter, 'build', 'ios', '--release', '--no-codesign', '--no-pub', *app.flutter_arguments])
+        except subprocess.CalledProcessError:
+            # 某些 Xcode 版本会在完成未签名的 Xcode build 后，仍由 Flutter
+            # 的部署检查报告缺少 Development Team。只在产物确实存在时继续，
+            # 后续的架构、签名、FFI 和 IPA 完整性检查仍必须全部通过。
+            candidate = root / 'build' / 'ios' / 'iphoneos' / 'Runner.app'
+            if not candidate.is_dir():
+                raise
+            print('Flutter 部署检查返回非零，继续验证已生成的未签名 Runner.app。', flush=True)
         application = root / 'build' / 'ios' / 'iphoneos' / 'Runner.app'
         validate_unsigned_application(application)
         symbols = subprocess.check_output(['xcrun', 'nm', '-gU', str(application / 'Runner')], text=True)
