@@ -260,6 +260,131 @@ class FindDramaPageState extends State<FindDramaPage> {
     }
   }
 
+  Widget _buildFilterPanelCard(ExploreFeed explore, double inset) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final selectedItems = <(String, String)>[
+      for (final row in _filterPanel!.rows)
+        for (final item in row.items)
+          if (_filterIds.contains(item.id)) (row.name, item.name),
+    ];
+    return Padding(
+      padding: EdgeInsets.fromLTRB(inset, 10, inset, 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.outlineVariant.withValues(alpha: .65)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.tune_rounded, size: 17, color: colors.primary),
+                  const SizedBox(width: 7),
+                  Text(
+                    '多维筛选',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (selectedItems.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: colors.primaryContainer,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '已选 ${selectedItems.length}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colors.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  TextButton.icon(
+                    onPressed: selectedItems.isEmpty
+                        ? null
+                        : () => _resetCategoryFilters(explore),
+                    icon: const Icon(Icons.refresh_rounded, size: 15),
+                    label: const Text('重置'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 7),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              for (final row in _filterPanel!.rows)
+                _buildFilterRow(explore, row),
+              const Divider(height: 12),
+              Row(
+                children: [
+                  Text(
+                    '当前条件',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: selectedItems.isEmpty
+                        ? Text(
+                            '全部剧集',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                for (final (dimension, name) in selectedItems)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: InputChip(
+                                      label: Text('$dimension：$name'),
+                                      onDeleted: () {
+                                        final row = _filterPanel!.rows.firstWhere(
+                                          (row) => row.name == dimension,
+                                        );
+                                        final item = row.items.firstWhere(
+                                          (item) => item.name == name,
+                                        );
+                                        _selectFilterItem(explore, row, item.id);
+                                      },
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      labelStyle: theme.textTheme.labelSmall,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _resetCategoryFilters(ExploreFeed explore) async {
+    if (_filterIds.isEmpty) return;
+    setState(_filterIds.clear);
+    await _reloadCategoryFilterResults(explore, _filterGenre);
+  }
+
   Widget _buildFilterRow(ExploreFeed explore, CategoryFilterRow row) {
     final theme = Theme.of(context);
     final selectedInRow = row.items.where((item) => _filterIds.contains(item.id));
@@ -477,16 +602,7 @@ class FindDramaPageState extends State<FindDramaPage> {
                 if (_filterPanel == null && _filterPanelLoading)
                   const LinearProgressIndicator(minHeight: 2),
                 if (_filterPanel != null)
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(inset, 4, 0, 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final row in _filterPanel!.rows)
-                          _buildFilterRow(explore, row),
-                      ],
-                    ),
-                  ),
+                  _buildFilterPanelCard(explore, inset),
               ],
               if (!rankMode && source.id != 'hongguo-self')
                 Padding(
