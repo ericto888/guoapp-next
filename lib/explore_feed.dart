@@ -130,7 +130,7 @@ class ExploreFeed extends ChangeNotifier {
 
   WatchEntry? get resume {
     final source = this.source;
-    if (source == null || tabs.isEmpty || _tab.id != tabs.first.id) return null;
+    if (source == null || groupedRankings || tabs.isEmpty || _tab.id != tabs.first.id) return null;
     return store.history
         .where((entry) => entry.drama.source == source.id)
         .firstOrNull;
