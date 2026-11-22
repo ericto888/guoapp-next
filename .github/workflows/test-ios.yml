@@ -1,0 +1,84 @@
+name: Test iOS IPA
+
+on:
+  push:
+    branches:
+      - fix/hongguo-find-module-separation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOPROXY: https://proxy.golang.org,direct
+  GOSUMDB: sum.golang.org
+  BUNDLED_MODULES: bundled-modules/hongguo
+  PYTHONUTF8: '1'
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/go.mod
+          cache-dependency-path: native/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Dart format check
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Dart analyze
+        run: dart analyze --fatal-infos lib test
+      - name: Flutter tests
+        run: flutter test --dart-define=DISABLE_REMOTE_IMAGES=true
+      - name: Hongguo tests
+        run: flutter test --dart-define=DISABLE_REMOTE_IMAGES=true --dart-define=ONLY_HONGGUO=true
+      - name: Go tests
+        run: go test -race ./...
+        working-directory: native
+
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: guoapp-modules/hongguo
+          path: bundled-modules/hongguo
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/go.mod
+          cache-dependency-path: native/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Check Apple build tools
+        run: |
+          xcodebuild -version
+          pod --version || brew install cocoapods
+          go version
+          flutter --version
+          flutter precache --ios
+      - name: Build unsigned iOS IPA
+        run: python scripts/build_ios.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-ios-ipa
+          path: dist/ios/*.ipa
+          if-no-files-found: error
+          retention-days: 14
