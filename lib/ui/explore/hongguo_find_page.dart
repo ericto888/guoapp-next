@@ -386,7 +386,6 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
   }
 
   Widget _genreAndBoards(double inset) {
-    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
