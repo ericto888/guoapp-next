@@ -23,7 +23,7 @@ CatalogCategory _findRankingTab(RankingBoard board) {
 }
 
 class ExploreFeed extends ChangeNotifier {
-  ExploreFeed(this.repository, this.store, {this.rankingMode = false}) {
+  ExploreFeed(this.repository, this.store, {this.rankingMode = false, this.sourceId}) {
     store.addListener(_storeChanged);
     repository.catalogUpdates.addListener(_metadataChanged);
     _open();
@@ -31,6 +31,7 @@ class ExploreFeed extends ChangeNotifier {
   final AppRepository repository;
   final LocalStore store;
   final bool rankingMode;
+  final String? sourceId;
   SourceCatalog? _catalog;
   CatalogCategory _tab = CatalogCategory.all;
   CatalogCategory _genre = CatalogCategory('all', '全部');
@@ -165,7 +166,7 @@ class ExploreFeed extends ChangeNotifier {
   }
 
   void _open() {
-    final id = store.source;
+    final id = sourceId ?? store.source;
     if (id == _catalog?.source.id) return;
     unawaited(repository.cancelCatalog());
     unawaited(repository.cancelRecommendations());

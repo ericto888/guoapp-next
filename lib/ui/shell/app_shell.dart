@@ -160,7 +160,7 @@ class _AppShellState extends State<AppShell> {
     if (!mounted) return;
     _source = source;
     setState(() {
-      if ((source != hongguoSourceId || !widget.store.findDramaTab) &&
+      if ((!SourceSite.isAvailable(hongguoFindSourceId) || !widget.store.findDramaTab) &&
           _tab == AppTab.find) {
         _tab = AppTab.explore;
       }
@@ -173,7 +173,7 @@ class _AppShellState extends State<AppShell> {
         AppTab.history =>
           widget.store.historyTab && !AppScope.of(context).television,
         AppTab.find =>
-          widget.store.source == hongguoSourceId &&
+          SourceSite.isAvailable(hongguoFindSourceId) &&
           widget.store.findDramaTab &&
           !AppScope.of(context).television,
         AppTab.explore || AppTab.follow || AppTab.mine => true,

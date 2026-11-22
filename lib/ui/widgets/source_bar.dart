@@ -13,6 +13,7 @@ class SourceBar extends StatelessWidget {
     required this.onOpenSearch,
     required this.onSearchSubmitted,
     this.searchController,
+    this.showSourceSwitcher = true,
     this.televisionLeading,
     this.leading = const [],
     this.actions = const [],
@@ -23,6 +24,7 @@ class SourceBar extends StatelessWidget {
   final VoidCallback onOpenSearch;
   final ValueChanged<String> onSearchSubmitted;
   final TextEditingController? searchController;
+  final bool showSourceSwitcher;
   final Widget? televisionLeading;
   final List<Widget> actions;
 
@@ -45,14 +47,14 @@ class SourceBar extends StatelessWidget {
     return switch (form) {
       FormFactor.phone => PageHeader(
         title: source,
-        actions: [...leading, switcher, search, ...actions],
+        actions: [...leading, if (showSourceSwitcher) switcher, search, ...actions],
       ),
       FormFactor.pad || FormFactor.window => PageHeader(
         title: source,
         actions: [
           ...leading,
-          switcher,
-          const SizedBox(width: 4),
+          if (showSourceSwitcher) switcher,
+          if (showSourceSwitcher) const SizedBox(width: 4),
           SizedBox(
             width: MediaQuery.sizeOf(context).width >= 900 ? 320 : 240,
             child: SearchField(
@@ -76,7 +78,7 @@ class SourceBar extends StatelessWidget {
               source,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-            switcher,
+            if (showSourceSwitcher) switcher,
             search,
             ...actions,
           ],

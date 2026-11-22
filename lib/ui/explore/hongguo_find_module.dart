@@ -32,6 +32,7 @@ class _HongguoFindModuleState extends State<HongguoFindModule> {
       AppScope.of(context).repository,
       widget.store,
       rankingMode: true,
+      sourceId: hongguoFindSourceId,
     );
   }
 
@@ -85,7 +86,8 @@ class _HongguoFindModuleState extends State<HongguoFindModule> {
                 SourceBar(
                   source: source.name,
                   searchController: _search,
-                  onSwitchSource: (anchor) => pickSource(anchor, widget.store),
+                  showSourceSwitcher: false,
+                  onSwitchSource: (_) {},
                   onOpenSearch: () => openSearch(context, widget.store, source),
                   onSearchSubmitted: (query) => _searchSubmitted(source, query),
                   leading: [

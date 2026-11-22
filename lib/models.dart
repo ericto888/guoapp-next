@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 const hongguoSourceId = 'hongguo';
+const hongguoFindSourceId = 'hongguo-self';
 
 bool validSourceId(String id) => RegExp(r'^[a-z0-9_-]{1,64}$').hasMatch(id);
 
