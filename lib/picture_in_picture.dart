@@ -57,6 +57,9 @@ class PictureInPicture extends ChangeNotifier {
   Map<String, Object>? _sent;
   ({Player player, bool playing, bool autoEnter})? _iosSent;
   int _iosUpdate = 0;
+  // A just-toggled preference must win over stale preferences while the
+  // asynchronous settings write is still in flight.
+  bool? _autoEnterOverride;
   ({Rect bounds, bool maximized, bool fullScreen})? _macRestore;
 
   bool get available => switch (defaultTargetPlatform) {
@@ -154,7 +157,11 @@ class PictureInPicture extends ChangeNotifier {
         clear();
         return;
       }
-      final next = (player: iosPlayer, playing: playing, autoEnter: autoEnter);
+      final next = (
+        player: iosPlayer,
+        playing: playing,
+        autoEnter: autoEnter && _autoEnterOverride != false,
+      );
       if (_iosSent == next) return;
       _iosSent = next;
       unawaited(_updateIOS(iosPlayer, playing, autoEnter, ++_iosUpdate));
@@ -197,7 +204,9 @@ class PictureInPicture extends ChangeNotifier {
   /// iOS controller. Settings can be changed while the playback route remains
   /// mounted, so waiting for the next player sync can leave AVKit's old value.
   void setAutoEnter(bool enabled) {
-    if (!_ios || !_supported || _iosSent == null) return;
+    if (!_ios) return;
+    _autoEnterOverride = enabled;
+    if (!_supported || _iosSent == null) return;
     final current = _iosSent!;
     final next = (
       player: current.player,
