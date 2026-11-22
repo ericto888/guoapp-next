@@ -4,6 +4,7 @@ import 'dart:ui' show AppLifecycleState, Size;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'app_device.dart';
 import 'core_bridge.dart';
@@ -16,6 +17,22 @@ import 'playback_loader.dart';
 import 'playback_preferences.dart';
 import 'playback_preloader.dart';
 import 'playback_recovery.dart';
+
+const _swapChromaSource = '''
+//!HOOK NATIVE
+//!BIND HOOKED
+//!DESC swap chroma
+vec4 hook() {
+    return HOOKED_tex(HOOKED_pos).xzyw;
+}
+''';
+
+Future<String> _swapChromaShader() async {
+  final directory = await getApplicationSupportDirectory();
+  final file = File('${directory.path}/swap_chroma.glsl');
+  await file.writeAsString(_swapChromaSource);
+  return file.path;
+}
 
 Size? videoDisplaySize(VideoParams parameters) {
   final width = (parameters.dw ?? 0) > 0 ? parameters.dw! : parameters.w ?? 0;
@@ -789,6 +806,7 @@ class PlaybackSession extends ChangeNotifier {
     final hwdec = switch (store.playbackPreferences.televisionDecoder) {
       TelevisionDecoder.software => 'no',
       TelevisionDecoder.hardwareDirect when Platform.isAndroid => 'mediacodec',
+      TelevisionDecoder.hardwareSwapUv when Platform.isAndroid => 'mediacodec-copy',
       TelevisionDecoder.hardware when Platform.isAndroid => 'mediacodec-copy',
       TelevisionDecoder.hardware when Platform.isIOS || Platform.isMacOS =>
         'videotoolbox-copy',
@@ -805,6 +823,13 @@ class PlaybackSession extends ChangeNotifier {
       await platform.setProperty('vd-lavc-fast', 'yes');
       await platform.setProperty('video-sync', 'audio');
       await platform.setProperty('framedrop', 'vo');
+      await platform.setProperty(
+        'glsl-shaders',
+        store.playbackPreferences.televisionDecoder ==
+                TelevisionDecoder.hardwareSwapUv
+            ? await _swapChromaShader()
+            : '',
+      );
     }
     await platform.setProperty(
       'demuxer-lavf-o',
