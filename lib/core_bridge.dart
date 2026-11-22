@@ -116,6 +116,7 @@ abstract class AppRepository {
     required int durationMs,
   }) async => throw AppFailure('当前环境不支持弹幕');
   Future<void> cancelCatalog() async {}
+  Future<void> cancelCategoryFilters() async {}
   Future<void> cancelSuggestions() async {}
   Future<void> cancelRecommendations() async {}
   Future<Drama?> supplementMetadata(Drama drama) async => null;
@@ -426,6 +427,8 @@ class NativeRepository extends AppRepository {
 
   @override
   Future<void> cancelCatalog() => _cancelReads('catalog-');
+  @override
+  Future<void> cancelCategoryFilters() => _cancelReads('categoryFilter');
   @override
   Future<void> cancelSuggestions() => _cancelReads('suggestions');
   @override
