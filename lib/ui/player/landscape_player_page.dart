@@ -979,7 +979,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                       ),
                     ),
                     Text(
-                      '第 ${session.episode.number} 集',
+                      '${session.episode.label}',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: .78),
                         fontSize: 12,
@@ -1684,7 +1684,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                 tooltip: '返回',
               ),
               Text(
-                '第 ${session.episode.number} 集',
+                '${session.episode.label}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -2003,7 +2003,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                           TextSpan(
                             children: [
                               TextSpan(
-                                text: '第 ${session.episode.number} 集',
+                                text: '${session.episode.label}',
                                 style: TextStyle(
                                   color: colors.onSurfaceVariant,
                                 ),
