@@ -158,22 +158,16 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     ];
     _filterOffset = result.nextOffset;
     _filterSessionId = result.sessionId;
-    _seenIds.addAll(items.map((item) => item.id));
+    _seenIds.addAll(items.map((item) => item.sourceId.isNotEmpty ? item.sourceId : item.id));
     return CatalogPage(items, hasMore: result.hasMore, page: page);
   }
 
   void _reloadFilterResults() {
     if (_panel == null) return;
     _filterGeneration++;
-    if (_filterFeed == null) {
-      _filterFeed = DramaFeed(load: _loadFilterPage);
-    } else {
-      unawaited(_filterFeed!.reload(force: true));
-    }
+    _filterFeed ??= DramaFeed(load: _loadFilterPage);
+    unawaited(_filterFeed!.reload(force: true));
     if (mounted) setState(() {});
-    if (_filterFeed != null && _filterFeed!.items.isEmpty) {
-      unawaited(_filterFeed!.reload(force: true));
-    }
   }
 
   void _selectFilter(CategoryFilterRow row, CategoryFilterItem item) {
@@ -586,26 +580,29 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
             ),
           ),
         Expanded(
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 2,
-            children: [
-              for (final item in items)
-                if (row.singleChoice)
-                  ChoiceChip(
-                    label: Text(item.name),
-                    selected: selected.contains(item.id) || (item.id.isEmpty && selected.isEmpty),
-                    onSelected: (_) => _selectFilter(row, item),
-                    visualDensity: VisualDensity.compact,
-                  )
-                else
-                  FilterChip(
-                    label: Text(item.name),
-                    selected: selected.contains(item.id) || (item.id.isEmpty && selected.isEmpty),
-                    onSelected: (_) => _selectFilter(row, item),
-                    visualDensity: VisualDensity.compact,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final item in items)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: row.singleChoice
+                        ? ChoiceChip(
+                            label: Text(item.name),
+                            selected: selected.contains(item.id) || (item.id.isEmpty && selected.isEmpty),
+                            onSelected: (_) => _selectFilter(row, item),
+                            visualDensity: VisualDensity.compact,
+                          )
+                        : FilterChip(
+                            label: Text(item.name),
+                            selected: selected.contains(item.id) || (item.id.isEmpty && selected.isEmpty),
+                            onSelected: (_) => _selectFilter(row, item),
+                            visualDensity: VisualDensity.compact,
+                          ),
                   ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
