@@ -1212,9 +1212,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         trackHeight: widePortrait ? (dragging ? 4 : 2) : (dragging ? 6 : 3),
         padding: EdgeInsets.zero,
         activeTrackColor: widePortrait
-            ? (state.playing ? hongguoTrack : const Color(0xFFFF9800))
+            ? (state.playing ? hongguoTrack : const Color(0xFFEF6C00))
             : colors.primary,
-        thumbColor: widePortrait ? hongguoProgress : colors.primary,
+        thumbColor: widePortrait ? Colors.white : colors.primary,
         inactiveTrackColor: widePortrait
             ? hongguoTrack
             : Colors.white.withValues(alpha: .25),
