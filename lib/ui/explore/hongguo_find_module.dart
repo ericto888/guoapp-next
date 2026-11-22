@@ -6,7 +6,6 @@ import '../../models.dart';
 import '../app_scope.dart';
 import '../cover_blur.dart';
 import '../detail/detail_page.dart';
-import '../shell/app_shell.dart';
 import '../widgets/bar_button.dart';
 import '../widgets/source_bar.dart';
 import '../widgets/status_view.dart';
@@ -43,9 +42,16 @@ class _HongguoFindModuleState extends State<HongguoFindModule> {
     super.dispose();
   }
 
-  void _open(Drama drama) => openPage<void>(
+  void _open(Drama drama) => Navigator.of(
     context,
-    (_) => DetailPage(store: widget.store, drama: drama),
+    rootNavigator: switch (AppScope.formFactorOf(context)) {
+      FormFactor.phone || FormFactor.television => true,
+      FormFactor.pad || FormFactor.window => false,
+    },
+  ).push(
+    MaterialPageRoute<void>(
+      builder: (_) => DetailPage(store: widget.store, drama: drama),
+    ),
   );
 
   void _searchSubmitted(SourceSite source, String query) {
