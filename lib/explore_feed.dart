@@ -98,6 +98,37 @@ class ExploreFeed extends ChangeNotifier {
     return boards;
   }
 
+  List<RankingBoard> get _generalBoards {
+    const order = [
+      'hot',
+      'recommend',
+      'new',
+      'hot_search',
+      'must_watch',
+      'followed',
+      'zhenguo',
+      'subscribe',
+    ];
+    final existingNames = {
+      for (final category in _catalog?.categories ?? const <CatalogCategory>[])
+        categoryName(category.name),
+      if (_catalog?.recommends == true) categoryName(recommendTab.name),
+    };
+    final boards = [
+      for (final board in _catalog?.boards ?? const <RankingBoard>[])
+        if (_boardGenre(board) == 'all' &&
+            order.contains(board.id.split('-').last) &&
+            !existingNames.contains(categoryName(_findRankingTab(board).name)))
+          board,
+    ];
+    boards.sort((a, b) {
+      final ai = order.indexOf(a.id.split('-').last);
+      final bi = order.indexOf(b.id.split('-').last);
+      return ai.compareTo(bi);
+    });
+    return boards;
+  }
+
   List<CatalogCategory> get tabs {
     final catalog = _catalog;
     if (catalog == null) return const [];
@@ -108,7 +139,7 @@ class ExploreFeed extends ChangeNotifier {
     return [
       if (catalog.recommends) recommendTab,
       all,
-      for (final board in catalog.boards) rankingTab(board),
+      for (final board in _generalBoards) rankingTab(board),
       ...genres,
     ];
   }
