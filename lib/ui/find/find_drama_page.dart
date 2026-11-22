@@ -39,6 +39,9 @@ class FindDramaPageState extends State<FindDramaPage> {
   DramaFeed? _filterFeed;
   Set<String> _filterIds = {};
   String _filterGenre = '';
+  CategoryFilterPanel? _filterPanel;
+  bool _filterPanelLoading = false;
+  String _filterPanelKey = '';
   int _filterOffset = 0;
   String _filterSessionId = '';
   final Set<String> _filterSeenIds = {};
@@ -69,6 +72,14 @@ class FindDramaPageState extends State<FindDramaPage> {
   void _changeMode(_FindMode mode, ExploreFeed explore) {
     if (_mode == mode) return;
     setState(() => _mode = mode);
+    if (mode == _FindMode.filter && explore.source?.id == 'hongguo-self') {
+      _filterPanel = null;
+      _filterPanelKey = '';
+      _filterIds.clear();
+      _filterFeed?.dispose();
+      _filterFeed = null;
+      unawaited(_ensureCategoryFilters(explore));
+    }
     final options = [
       for (final tab in explore.tabs)
         if (mode == _FindMode.rank
@@ -93,6 +104,14 @@ class FindDramaPageState extends State<FindDramaPage> {
       _filterIds.clear();
     }
     explore.select(id);
+    if (_mode == _FindMode.filter && explore.source?.id == 'hongguo-self') {
+      _filterPanel = null;
+      _filterPanelKey = '';
+      _filterIds.clear();
+      _filterFeed?.dispose();
+      _filterFeed = null;
+      unawaited(_ensureCategoryFilters(explore));
+    }
     _toTop();
   }
 
@@ -134,69 +153,104 @@ class FindDramaPageState extends State<FindDramaPage> {
     _ => '',
   };
 
-  Future<void> _openCategoryFilters(ExploreFeed explore) async {
+  Future<void> _ensureCategoryFilters(ExploreFeed explore) async {
     final source = explore.source;
     if (source == null || source.id != 'hongguo-self') return;
     final genre = _genreFor(explore);
-    final repository = AppScope.of(context).repository;
+    final key = '${source.id}|$genre';
+    if (_filterPanelKey == key || _filterPanelLoading) return;
+    _filterPanelLoading = true;
+    _filterPanelKey = key;
     try {
-      await repository.cancelCategoryFilters();
-      final panel = await repository.categoryFilterPanel(
+      await AppScope.of(context).repository.cancelCategoryFilters();
+      final panel = await AppScope.of(context).repository.categoryFilterPanel(
         source.id,
         genre: genre,
       );
-      if (!mounted) return;
-      final chosen = await _showCategoryFilterSheet(
-        context,
-        panel,
-        genre == _filterGenre ? _filterIds : <String>{},
-      );
-      if (!mounted || chosen == null) return;
-      _filterIds = chosen;
-      _filterGenre = genre;
-      _filterOffset = 0;
-      _filterSessionId = '';
-      _filterSeenIds.clear();
-      _filterFeed?.dispose();
-      final feed = DramaFeed(
-        load: (page, force) async {
-          if (page <= 1 || force) {
-            _filterOffset = 0;
-            _filterSessionId = '';
-            _filterSeenIds.clear();
-          }
-          final result = await repository.categoryFilterPage(
-            source.id,
-            genre: genre,
-            filterIds: _filterIds.toList(),
-            offset: _filterOffset,
-            sessionId: _filterSessionId,
-            seenIds: _filterSeenIds.toList(),
-          );
-          _filterOffset = result.nextOffset;
-          _filterSessionId = result.sessionId;
-          final dramas = [
-            for (final item in result.items) Drama.fromJson(item),
-          ];
-          for (final drama in dramas) {
-            final id = drama.sourceId.isNotEmpty
-                ? drama.sourceId
-                : drama.id.split(':').last;
-            if (id.isNotEmpty) _filterSeenIds.add(id);
-          }
-          return CatalogPage(dramas, hasMore: result.hasMore, page: page);
-        },
-      );
-      _filterFeed = feed;
-      setState(() {});
-      await feed.reload(force: true);
-      if (mounted) _toTop();
+      if (!mounted || _filterPanelKey != key) return;
+      setState(() {
+        _filterPanel = panel;
+        _filterGenre = genre;
+        _filterIds.removeWhere((id) => !panel.validItemIds.contains(id));
+      });
+      await _reloadCategoryFilterResults(explore, genre);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('加载红果筛选失败：$error')));
+      _filterPanelKey = '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('加载红果筛选条件失败：$error')),
+      );
+    } finally {
+      _filterPanelLoading = false;
+      if (mounted) setState(() {});
     }
+  }
+
+  Future<void> _reloadCategoryFilterResults(
+    ExploreFeed explore,
+    String genre,
+  ) async {
+    final source = explore.source;
+    if (source == null || source.id != 'hongguo-self') return;
+    final repository = AppScope.of(context).repository;
+    _filterOffset = 0;
+    _filterSessionId = '';
+    _filterSeenIds.clear();
+    _filterFeed?.dispose();
+    final feed = DramaFeed(
+      load: (page, force) async {
+        if (page <= 1 || force) {
+          _filterOffset = 0;
+          _filterSessionId = '';
+          _filterSeenIds.clear();
+        }
+        final result = await repository.categoryFilterPage(
+          source.id,
+          genre: genre,
+          filterIds: _filterIds.toList(),
+          offset: _filterOffset,
+          sessionId: _filterSessionId,
+          seenIds: _filterSeenIds.toList(),
+        );
+        _filterOffset = result.nextOffset;
+        _filterSessionId = result.sessionId;
+        final dramas = [
+          for (final item in result.items) Drama.fromJson(item),
+        ];
+        for (final drama in dramas) {
+          final id = drama.sourceId.isNotEmpty
+              ? drama.sourceId
+              : drama.id.split(':').last;
+          if (id.isNotEmpty) _filterSeenIds.add(id);
+        }
+        return CatalogPage(dramas, hasMore: result.hasMore, page: page);
+      },
+    );
+    _filterFeed = feed;
+    if (mounted) setState(() {});
+    await feed.reload(force: true);
+    if (mounted) _toTop();
+  }
+
+  Future<void> _selectFilterItem(
+    ExploreFeed explore,
+    CategoryFilterRow row,
+    String? itemId,
+  ) async {
+    final rowIds = row.items.map((item) => item.id).toSet();
+    setState(() {
+      if (itemId == null) {
+        _filterIds.removeAll(rowIds);
+      } else if (row.singleChoice) {
+        _filterIds.removeAll(rowIds);
+        _filterIds.add(itemId);
+      } else if (_filterIds.contains(itemId)) {
+        _filterIds.remove(itemId);
+      } else {
+        _filterIds.add(itemId);
+      }
+    });
+    await _reloadCategoryFilterResults(explore, _filterGenre);
   }
 
   Future<void> _refresh(ExploreFeed explore) async {
@@ -208,121 +262,75 @@ class FindDramaPageState extends State<FindDramaPage> {
     }
   }
 
-  Future<Set<String>?> _showCategoryFilterSheet(
-    BuildContext context,
-    CategoryFilterPanel panel,
-    Set<String> initial,
-  ) => showModalBottomSheet<Set<String>>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
-    builder: (sheetContext) {
-      var selected = Set<String>.of(initial);
-      return StatefulBuilder(
-        builder: (context, update) => SizedBox(
-          height: MediaQuery.sizeOf(context).height * 0.78,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        '红果多维筛选',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => update(() => selected.clear()),
-                      child: const Text('清空全部'),
-                    ),
-                  ],
-                ),
+  Widget _buildFilterRow(ExploreFeed explore, CategoryFilterRow row) {
+    final theme = Theme.of(context);
+    final selectedInRow = row.items.where((item) => _filterIds.contains(item.id));
+    final allSelected = selectedInRow.isEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            child: Text(
+              row.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    for (final row in panel.rows) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                row.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => update(() {
-                                selected.removeAll(
-                                  row.items.map((item) => item.id),
-                                );
-                              }),
-                              child: const Text('不限'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          for (final item in row.items)
-                            if (row.singleChoice)
-                              ChoiceChip(
-                                label: Text(item.name),
-                                selected: selected.contains(item.id),
-                                onSelected: (checked) => update(() {
-                                  selected.removeAll(
-                                    row.items.map((entry) => entry.id),
-                                  );
-                                  if (checked) selected.add(item.id);
-                                }),
-                              )
-                            else
-                              FilterChip(
-                                label: Text(item.name),
-                                selected: selected.contains(item.id),
-                                onSelected: (checked) => update(() {
-                                  if (checked) {
-                                    selected.add(item.id);
-                                  } else {
-                                    selected.remove(item.id);
-                                  }
-                                }),
-                              ),
-                        ],
-                      ),
-                      const Divider(height: 20),
-                    ],
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => Navigator.pop(sheetContext, selected),
-                    child: Text('查看结果（${selected.length} 项已选）'),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterChoice(
+                    label: '全部',
+                    selected: allSelected,
+                    onTap: () => _selectFilterItem(explore, row, null),
+                  ),
+                  for (final item in row.items)
+                    _filterChoice(
+                      label: item.name,
+                      selected: _filterIds.contains(item.id),
+                      onTap: () => _selectFilterItem(explore, row, item.id),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChoice({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: 7),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        labelStyle: theme.textTheme.labelMedium?.copyWith(
+          color: selected
+              ? theme.colorScheme.onSecondaryContainer
+              : theme.colorScheme.onSurfaceVariant,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         ),
-      );
-    },
-  );
+        onSelected: (_) => onTap(),
+      ),
+    );
+  }
 
   void _open(Drama drama) => openPage<void>(
     context,
@@ -395,6 +403,12 @@ class FindDramaPageState extends State<FindDramaPage> {
           ? _filterFeed!.items
           : explore.items;
       final rankMode = _mode == _FindMode.rank;
+      if (!rankMode && source.id == 'hongguo-self' &&
+          _filterPanel == null && !_filterPanelLoading) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_ensureCategoryFilters(explore));
+        });
+      }
       return Scaffold(
         body: SafeArea(
           bottom: false,
@@ -439,40 +453,32 @@ class FindDramaPageState extends State<FindDramaPage> {
                   onSelected: (id) => _selectTab(explore, id),
                   onShowAll: (anchor) => _pickCategory(anchor, explore),
                 ),
-              if (!rankMode)
+              if (!rankMode && source.id == 'hongguo-self') ...[
+                if (_filterPanel == null && _filterPanelLoading)
+                  const LinearProgressIndicator(minHeight: 2),
+                if (_filterPanel != null)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(inset, 4, 0, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final row in _filterPanel!.rows)
+                          _buildFilterRow(explore, row),
+                      ],
+                    ),
+                  ),
+              ],
+              if (!rankMode && source.id != 'hongguo-self')
                 Padding(
                   padding: EdgeInsets.fromLTRB(inset, 8, inset, 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          explore.tab.id.isEmpty
-                              ? '已选：全部剧集'
-                              : '已选：${explore.tab.name}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ),
-                      if (source.id == 'hongguo-self')
-                        TextButton.icon(
-                          onPressed: () => _openCategoryFilters(explore),
-                          icon: const Icon(Icons.tune_rounded, size: 16),
-                          label: const Text('多维筛选'),
-                        ),
-                      TextButton.icon(
-                        onPressed: explore.tab.id.isEmpty
-                            ? null
-                            : () => _selectTab(explore, ''),
-                        icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: const Text('重置'),
-                      ),
-                    ],
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      explore.tab.id.isEmpty
+                          ? '已选：全部剧集'
+                          : '已选：${explore.tab.name}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                 ),
               Expanded(
