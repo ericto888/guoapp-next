@@ -6,7 +6,7 @@ on:
       - main
   push:
     branches:
-      - feature/hongguo-category-filter-bridge
+      - feature/hongguo-category-filter-clean
   workflow_dispatch:
 
 permissions:
