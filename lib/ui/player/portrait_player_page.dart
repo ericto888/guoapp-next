@@ -1011,6 +1011,47 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_keepWidePortraitChrome)
+              ListenableBuilder(
+                listenable: session.danmaku,
+                builder: (context, _) {
+                  final enabled = session.danmaku.enabled;
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Material(
+                      color: Colors.black.withValues(alpha: .32),
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => session.danmaku.setEnabled(!enabled),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                enabled ? Icons.subtitles_rounded : Icons.subtitles_off_rounded,
+                                size: 15,
+                                color: enabled ? const Color(0xFFFFA23A) : Colors.white70,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                enabled ? '弹幕开' : '弹幕关',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            if (_keepWidePortraitChrome) const SizedBox(height: 7),
             Text(
               drama.title,
               maxLines: 2,
