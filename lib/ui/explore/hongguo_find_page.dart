@@ -599,10 +599,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       (item) => item.id.isEmpty,
       orElse: () => const CategoryFilterItem(id: '', name: '全部'),
     );
-    final choices = [
-      allItem,
-      ...items.where((item) => item.id.isNotEmpty),
-    ];
+    final choices = [allItem, ...items.where((item) => item.id.isNotEmpty)];
     final label = row.type == 'genre' ? '全部体裁' : row.name.trim();
     Widget chip(CategoryFilterItem item) => row.singleChoice
         ? ChoiceChip(
