@@ -201,6 +201,7 @@ class FindDramaPageState extends State<FindDramaPage> {
 
   Future<void> _refresh(ExploreFeed explore) async {
     if (_mode == _FindMode.filter && _filterFeed != null) {
+      await AppScope.of(context).repository.cancelCategoryFilters();
       await _filterFeed!.reload(force: true);
     } else {
       await explore.refresh();
