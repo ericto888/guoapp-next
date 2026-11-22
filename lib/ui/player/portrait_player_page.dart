@@ -320,7 +320,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   (double, double) get _zoomRange {
     final video = _session.videoSize;
-    if (video == null || MediaQuery.sizeOf(context).isEmpty) return (1, 1);
+    if (video == null || _session.audio || MediaQuery.sizeOf(context).isEmpty) {
+      return (1, 1);
+    }
     final width = _fitWidth(_session.videoFit, video);
     return (
       _fitWidth(VideoFit.auto, video) / width,
