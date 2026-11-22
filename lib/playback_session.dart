@@ -771,6 +771,7 @@ class PlaybackSession extends ChangeNotifier {
     if (platform is! NativePlayer) return;
     final hwdec = switch (store.playbackPreferences.televisionDecoder) {
       TelevisionDecoder.software => 'no',
+      TelevisionDecoder.hardwareDirect when Platform.isAndroid => 'mediacodec',
       TelevisionDecoder.hardware when Platform.isAndroid => 'mediacodec-copy',
       TelevisionDecoder.hardware when Platform.isIOS || Platform.isMacOS =>
         'videotoolbox-copy',
