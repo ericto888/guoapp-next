@@ -109,6 +109,7 @@ Widget fadeInFrameBuilder(
 
 /// Plays a one-time fade and slight rise when first built. Items are
 /// remembered by [id] in [played] so recycled or rebuilt items stay still.
+
 class EnterOnce extends StatefulWidget {
   const EnterOnce({
     super.key,
