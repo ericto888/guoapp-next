@@ -1017,7 +1017,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 height: 1.3,
                 shadows: [Shadow(color: Color(0x88000000), blurRadius: 4)],
