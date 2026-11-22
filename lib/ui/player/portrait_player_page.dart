@@ -1204,7 +1204,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     final colors = Theme.of(context).colorScheme;
     final widePortrait = _keepWidePortraitChrome;
     // 横片竖持采用红果风格的深色细进度条；原生竖片保留主题色样式。
-    const hongguoProgress = Color(0xFFC83A36);
     const hongguoTrack = Color(0xFF383838);
     const hongguoBuffered = Color(0xFF666666);
     return SliderTheme(
