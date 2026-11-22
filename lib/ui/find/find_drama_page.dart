@@ -61,13 +61,8 @@ class FindDramaPageState extends State<FindDramaPage> {
     super.dispose();
   }
 
-  List<CatalogCategory> _options(ExploreFeed explore) => [
-    for (final tab in explore.tabs)
-      if (_mode == _FindMode.rank
-          ? tab.id.isEmpty || tab.id.startsWith('app:')
-          : !tab.id.startsWith('app:'))
-        tab,
-  ];
+  List<CatalogCategory> _options(ExploreFeed explore) =>
+      _mode == _FindMode.rank ? explore.tabs : explore.categories;
 
   void _changeMode(_FindMode mode, ExploreFeed explore) {
     if (_mode == mode) return;
@@ -80,13 +75,7 @@ class FindDramaPageState extends State<FindDramaPage> {
       _filterFeed = null;
       unawaited(_ensureCategoryFilters(explore));
     }
-    final options = [
-      for (final tab in explore.tabs)
-        if (mode == _FindMode.rank
-            ? tab.id.isEmpty || tab.id.startsWith('app:')
-            : !tab.id.startsWith('app:'))
-          tab,
-    ];
+    final options = mode == _FindMode.rank ? explore.tabs : explore.categories;
     if (options.isNotEmpty && !options.any((tab) => tab.id == explore.tab.id)) {
       explore.select(options.first.id);
     }
@@ -148,10 +137,17 @@ class FindDramaPageState extends State<FindDramaPage> {
     if (value != null) _selectTab(explore, value);
   }
 
-  String _genreFor(ExploreFeed explore) => switch (explore.tab.id) {
-    'short_play' || 'comic_series' || 'ai_series' => explore.tab.id,
+  String _genreFor(ExploreFeed explore) => switch (explore.genre.id) {
+    'series' || 'short_play' || 'comic_series' || 'ai_series' =>
+      explore.genre.id,
     _ => '',
   };
+
+  void _selectGenre(ExploreFeed explore, String id) {
+    if (id == explore.genre.id) return;
+    explore.selectGenre(id);
+    _toTop();
+  }
 
   Future<void> _ensureCategoryFilters(ExploreFeed explore) async {
     final source = explore.source;
@@ -445,6 +441,27 @@ class FindDramaPageState extends State<FindDramaPage> {
                   showSelectedIcon: false,
                 ),
               ),
+              if (rankMode && explore.usesHongguoGenreTabs)
+                CategoryTabs<String>(
+                  options: [
+                    for (final tab in explore.genreTabs)
+                      ChoiceOption(tab.id, tab.name),
+                  ],
+                  selected: explore.genre.id,
+                  onSelected: (id) => _selectGenre(explore, id),
+                  onShowAll: (anchor) => showChoicePanel<String>(
+                    context: anchor,
+                    title: '剧集类型',
+                    options: [
+                      for (final tab in explore.genreTabs)
+                        ChoiceOption(tab.id, tab.name),
+                    ],
+                    selected: explore.genre.id,
+                    grid: ChoiceGrid.categories,
+                  ).then((id) {
+                    if (id != null) _selectGenre(explore, id);
+                  }),
+                ),
               if (options.isNotEmpty)
                 CategoryTabs<String>(
                   options: [
