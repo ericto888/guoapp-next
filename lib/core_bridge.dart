@@ -21,6 +21,7 @@ import 'diary_service.dart';
 import 'app_update.dart';
 import 'sorani_account.dart';
 import 'source_modules.dart';
+import 'category_filter_models.dart';
 
 typedef _NativeRequest = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _DartRequest = Pointer<Utf8> Function(Pointer<Utf8>);
@@ -136,6 +137,18 @@ abstract class AppRepository {
     String source, {
     bool force = false,
   }) async => const [CatalogCategory.all];
+  Future<CategoryFilterPanel> categoryFilterPanel(
+    String source, {
+    String genre = '',
+  }) async => throw AppFailure('当前站源不支持多维分类筛选');
+  Future<CategoryFilterPage> categoryFilterPage(
+    String source, {
+    String genre = '',
+    List<String> filterIds = const [],
+    int offset = 0,
+    String sessionId = '',
+    List<String> seenIds = const [],
+  }) async => throw AppFailure('当前站源不支持多维分类筛选');
   bool get supportsSourceManagement => false;
   Future<List<SourceModule>> modules() async => const [];
   Future<ModuleStore> moduleIndex() async => throw AppFailure('当前环境不支持模块商店');
@@ -697,6 +710,8 @@ class NativeRepository extends AppRepository {
         'catalog',
         'cached',
         'categories',
+        'categoryFilterPanel',
+        'categoryFilterPage',
         'recommendations',
         'cachedRecommendations',
         'suggestions',
@@ -776,6 +791,8 @@ class NativeRepository extends AppRepository {
           {
             'catalog',
             'categories',
+            'categoryFilterPanel',
+            'categoryFilterPage',
             'suggestions',
             'recommendations',
             'metadata',
@@ -795,6 +812,8 @@ class NativeRepository extends AppRepository {
         const {
               'catalog',
               'categories',
+              'categoryFilterPanel',
+              'categoryFilterPage',
               'suggestions',
               'recommendations',
               'rankings',
@@ -922,6 +941,42 @@ class NativeRepository extends AppRepository {
         await _call({'action': 'updateSystemProxy', 'systemProxy': value});
       });
     }
+  }
+
+  @override
+  Future<CategoryFilterPanel> categoryFilterPanel(
+    String source, {
+    String genre = '',
+  }) async {
+    _authorize(source);
+    final result = await _read('categoryFilterPanel-$source-$genre', {
+      'action': 'categoryFilterPanel',
+      'source': source,
+      'genre': genre,
+    });
+    return CategoryFilterPanel.fromJson(result);
+  }
+
+  @override
+  Future<CategoryFilterPage> categoryFilterPage(
+    String source, {
+    String genre = '',
+    List<String> filterIds = const [],
+    int offset = 0,
+    String sessionId = '',
+    List<String> seenIds = const [],
+  }) async {
+    _authorize(source);
+    final result = await _read('categoryFilterPage-$source-$genre-${filterIds.join(',')}', {
+      'action': 'categoryFilterPage',
+      'source': source,
+      'genre': genre,
+      'filterIds': filterIds,
+      'offset': offset,
+      'filterSessionId': sessionId,
+      'seenIds': seenIds,
+    });
+    return CategoryFilterPage.fromJson(result);
   }
 
   @override
