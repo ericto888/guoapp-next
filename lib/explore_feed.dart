@@ -11,8 +11,13 @@ import 'source_catalog.dart';
 
 const recommendTab = CatalogCategory('app:recommend', '推荐');
 
-CatalogCategory rankingTab(RankingBoard board) =>
-    CatalogCategory('app:rank:${board.id}', board.name);
+CatalogCategory rankingTab(RankingBoard board) {
+  final name = board.name.replaceFirst(
+    RegExp(r'^(全部|真人剧|漫剧|AI剧)\\s*[·•]\\s*'),
+    '',
+  );
+  return CatalogCategory('app:rank:${board.id}', name);
+}
 
 class ExploreFeed extends ChangeNotifier {
   ExploreFeed(this.repository, this.store) {
@@ -24,6 +29,7 @@ class ExploreFeed extends ChangeNotifier {
   final LocalStore store;
   SourceCatalog? _catalog;
   CatalogCategory _tab = CatalogCategory.all;
+  CatalogCategory _genre = CatalogCategory('all', '全部');
   DramaFeed? _feed;
   Map<String, int> _ranks = const {};
   final _feeds = <String, DramaFeed>{};
@@ -33,11 +39,41 @@ class ExploreFeed extends ChangeNotifier {
   SourceSite? get source => _catalog?.source;
   DramaFeed? get feed => _feed;
   CatalogCategory get tab => _tab;
+  CatalogCategory get genre => _genre;
   bool get recommending => _tab.id == recommendTab.id;
+
+  bool get groupedRankings =>
+      _catalog?.source.id == 'hongguo' &&
+      _catalog!.boards.any((board) => board.id.startsWith('hongguo-native-'));
+
+  List<CatalogCategory> get genreTabs => const [
+    CatalogCategory('all', '全部'),
+    CatalogCategory('human', '真人剧'),
+    CatalogCategory('comic', '漫剧'),
+    CatalogCategory('ai', 'AI剧'),
+  ];
+
+  String _boardGenre(RankingBoard board) {
+    final match = RegExp(r'^hongguo-native-(all|human|comic|ai)-')
+        .firstMatch(board.id);
+    if (match != null) return match.group(1)!;
+    if (board.name.startsWith('真人剧')) return 'human';
+    if (board.name.startsWith('漫剧')) return 'comic';
+    if (board.name.startsWith('AI剧')) return 'ai';
+    return 'all';
+  }
+
+  List<RankingBoard> get _visibleBoards => [
+    for (final board in _catalog?.boards ?? const <RankingBoard>[])
+      if (_boardGenre(board) == _genre.id) board,
+  ];
 
   List<CatalogCategory> get tabs {
     final catalog = _catalog;
     if (catalog == null) return const [];
+    if (groupedRankings) {
+      return [for (final board in _visibleBoards) rankingTab(board)];
+    }
     final [all, ...genres] = catalog.categories;
     return [
       if (catalog.recommends) recommendTab,
@@ -45,6 +81,27 @@ class ExploreFeed extends ChangeNotifier {
       for (final board in catalog.boards) rankingTab(board),
       ...genres,
     ];
+  }
+
+  RankingBoard? get _defaultBoard {
+    final boards = _visibleBoards;
+    for (final board in boards) {
+      if (board.id.endsWith('-recommend')) return board;
+    }
+    return boards.isEmpty ? null : boards.first;
+  }
+
+  void selectGenre(String id) {
+    if (!groupedRankings || id == _genre.id) return;
+    final selected = genreTabs.where((item) => item.id == id).firstOrNull;
+    if (selected == null) return;
+    _genre = selected;
+    final board = _defaultBoard;
+    if (board != null) {
+      _select(rankingTab(board));
+    } else {
+      _notify();
+    }
   }
 
   int? rankOf(Drama drama) => _ranks[drama.id];
@@ -86,6 +143,7 @@ class ExploreFeed extends ChangeNotifier {
     unawaited(repository.cancelCatalog());
     unawaited(repository.cancelRecommendations());
     _dropFeeds();
+    _genre = const CatalogCategory('all', '全部');
     if (id.isEmpty) {
       _catalog = null;
       return;
@@ -103,6 +161,13 @@ class ExploreFeed extends ChangeNotifier {
       await catalog.loadCategories(force: force);
     } catch (_) {}
     if (_disposed || catalog != _catalog) return;
+    if (groupedRankings) {
+      final board = _defaultBoard;
+      if (board != null) {
+        _select(rankingTab(board));
+        return;
+      }
+    }
     _notify();
   }
 
