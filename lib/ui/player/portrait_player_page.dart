@@ -1021,35 +1021,45 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                     child: Tooltip(
                       message: enabled ? '关闭弹幕' : '开启弹幕',
                       child: Material(
-                      color: Colors.black.withValues(alpha: .32),
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => session.danmaku.setEnabled(!enabled),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                enabled ? Icons.subtitles_rounded : Icons.subtitles_off_rounded,
-                                size: 15,
-                                color: enabled ? const Color(0xFFFFA23A) : Colors.white70,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                enabled ? '弹幕开' : '弹幕关',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
+                        color: Colors.black.withValues(alpha: .32),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => session.danmaku.setEnabled(!enabled),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  enabled
+                                      ? Icons.subtitles_rounded
+                                      : Icons.subtitles_off_rounded,
+                                  size: 15,
+                                  color: enabled
+                                      ? const Color(0xFFFFA23A)
+                                      : Colors.white70,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 5),
+                                Text(
+                                  enabled ? '弹幕开' : '弹幕关',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
                     ),
                   );
                 },
