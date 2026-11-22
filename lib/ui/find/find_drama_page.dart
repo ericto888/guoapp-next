@@ -313,7 +313,7 @@ class FindDramaPageState extends State<FindDramaPage> {
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: () => Navigator.pop(sheetContext, selected),
-                    child: Text('查看结果（' + selected.length.toString() + ' 项已选）'),
+                    child: Text('查看结果（${selected.length} 项已选）'),
                   ),
                 ),
               ),
@@ -349,7 +349,7 @@ class FindDramaPageState extends State<FindDramaPage> {
     listenable: Listenable.merge([
       _explore!,
       widget.store,
-      if (_filterFeed != null) _filterFeed!,
+      ?_filterFeed,
     ]),
     builder: (context, _) {
       final explore = _explore!;
