@@ -3,13 +3,10 @@ name: Validate Hongguo category filter bridge
 on:
   pull_request:
     branches: [main]
-  push:
-    branches:
-      - feature/hongguo-category-filter-app
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: hongguo-category-filter-${{ github.workflow }}-${{ github.ref }}
@@ -29,17 +26,6 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get --enforce-lockfile
-      - name: Format category filter files
-        run: dart format lib/category_filter_models.dart lib/core_bridge.dart lib/ui/find/find_drama_page.dart lib/ui/shell/app_shell.dart
-      - name: Commit category filter formatting
-        run: |
-          if ! git diff --quiet -- lib/category_filter_models.dart lib/core_bridge.dart lib/ui/find/find_drama_page.dart lib/ui/shell/app_shell.dart; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add lib/category_filter_models.dart lib/core_bridge.dart lib/ui/find/find_drama_page.dart lib/ui/shell/app_shell.dart
-            git commit -m 'style(hongguo): format category filter integration'
-            git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
-          fi
       - name: Dart format check
         run: dart format --output=none --set-exit-if-changed lib/category_filter_models.dart lib/core_bridge.dart lib/ui/find/find_drama_page.dart lib/ui/shell/app_shell.dart
       - name: Dart analyzer
