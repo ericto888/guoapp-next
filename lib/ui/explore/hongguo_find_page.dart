@@ -603,9 +603,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       allItem,
       ...items.where((item) => item.id.isNotEmpty),
     ];
-    final label = row.type == 'genre'
-        ? '全部体裁'
-        : row.name.trim();
+    final label = row.type == 'genre' ? '全部体裁' : row.name.trim();
     Widget chip(CategoryFilterItem item) => row.singleChoice
         ? ChoiceChip(
             label: Text(
