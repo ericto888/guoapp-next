@@ -599,7 +599,10 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       (item) => item.id.isEmpty,
       orElse: () => const CategoryFilterItem(id: '', name: '全部'),
     );
-    final choices = items.where((item) => item.id.isNotEmpty).toList();
+    final choices = [
+      allItem,
+      ...items.where((item) => item.id.isNotEmpty),
+    ];
     final label = row.type == 'genre'
         ? '全部主题'
         : row.name.trim().isEmpty
@@ -638,27 +641,16 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
             width: 100,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: row.singleChoice
-                  ? ChoiceChip(
-                      label: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      selected: selected.isEmpty,
-                      onSelected: (_) => _selectFilter(row, allItem),
-                      visualDensity: VisualDensity.compact,
-                    )
-                  : FilterChip(
-                      label: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      selected: selected.isEmpty,
-                      onSelected: (_) => _selectFilter(row, allItem),
-                      visualDensity: VisualDensity.compact,
-                    ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 8),
