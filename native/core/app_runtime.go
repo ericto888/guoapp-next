@@ -84,6 +84,11 @@ type nativeInput struct {
 	Page            int                     `json:"page"`
 	Query           string                  `json:"query"`
 	Category        string                  `json:"category"`
+	Category        string                  `json:"category"`
+	Genre           string                  `json:"genre"`
+	FilterIDs       []string                `json:"filterIds"`
+	SeenIDs         []string                `json:"seenIds"`
+	Offset          int                     `json:"offset"`
 	Drama           LibraryDrama            `json:"drama"`
 	Chapter         Chapter                 `json:"chapter"`
 	Index           int                     `json:"index"`
