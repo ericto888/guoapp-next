@@ -595,7 +595,8 @@ class FindDramaPageState extends State<FindDramaPage> {
                     if (id != null) _selectGenre(explore, id);
                   }),
                 ),
-              if (options.isNotEmpty)
+              // 筛选找片模式使用下方的多维筛选卡片，不再重复显示旧分类栏。
+              if (rankMode && options.isNotEmpty)
                 CategoryTabs<String>(
                   options: [
                     for (final tab in options) ChoiceOption(tab.id, tab.name),
