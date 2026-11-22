@@ -179,7 +179,7 @@ class ExplorePageState extends State<ExplorePage> {
           onSelected: _selectTab,
           onShowAll: _pickCategory,
         ),
-      )
+      );
       return Scaffold(
         body: SafeArea(
           bottom: false,
