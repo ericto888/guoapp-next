@@ -360,7 +360,7 @@ func nativeDispatch(input nativeInput) (any, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
-	if input.Action == "danmaku" || input.Action == "preload" || input.Session != "" && (input.Action == "catalog" || input.Action == "categories" || input.Action == "suggestions" || input.Action == "recommendations" || input.Action == "metadata") {
+	if input.Action == "danmaku" || input.Action == "preload" || input.Session != "" && (input.Action == "catalog" || input.Action == "categories" || input.Action == "suggestions" || input.Action == "recommendations" || input.Action == "metadata" || input.Action == "categoryFilterPanel" || input.Action == "categoryFilterPage") {
 		work, finish, err := engine.beginRead(ctx, input)
 		if err != nil {
 			return nil, err
@@ -460,6 +460,26 @@ func nativeDispatch(input nativeInput) (any, error) {
 	case "categories":
 		items, err := engine.nativeCategories(ctx, input.Source, input.Force)
 		return map[string]any{"items": items}, err
+	case "categoryFilterPanel":
+		provider, ok := engine.downloader.provider(nativeActionSource(input))
+		if !ok {
+			return nil, errors.New("请选择有效站源")
+		}
+		filterer, ok := providerAs[CategoryFilterer](provider)
+		if !ok {
+			return nil, errors.New("当前站源不支持多维分类筛选")
+		}
+		return filterer.CategoryPanel(ctx, input.Genre)
+	case "categoryFilterPage":
+		provider, ok := engine.downloader.provider(nativeActionSource(input))
+		if !ok {
+			return nil, errors.New("请选择有效站源")
+		}
+		filterer, ok := providerAs[CategoryFilterer](provider)
+		if !ok {
+			return nil, errors.New("当前站源不支持多维分类筛选")
+		}
+		return filterer.CategoryFilterPage(ctx, input.Genre, input.FilterIDs, input.Offset, input.Session, input.SeenIDs)
 	case "cover":
 		return engine.loadCover(ctx, input.Drama, input.Force)
 	case "prepareCover":
