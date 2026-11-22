@@ -193,8 +193,9 @@ class FindDramaPageState extends State<FindDramaPage> {
       if (mounted) _toTop();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('加载红果筛选失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('加载红果筛选失败：$error')));
     }
   }
 
@@ -452,9 +453,9 @@ class FindDramaPageState extends State<FindDramaPage> {
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                         ),
                       ),
