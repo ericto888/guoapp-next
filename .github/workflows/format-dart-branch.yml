@@ -1,0 +1,36 @@
+name: Format Dart sources
+
+on:
+  push:
+    branches:
+      - fix/hongguo-find-module-separation
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ github.token }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Apply Dart formatting
+        run: dart format lib test
+      - name: Commit formatting changes
+        run: |
+          if git diff --quiet -- lib test; then
+            echo "No formatting changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib test
+          git commit -m "Format remaining Dart sources"
+          git push
