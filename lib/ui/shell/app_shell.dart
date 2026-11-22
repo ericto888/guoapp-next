@@ -154,7 +154,6 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _storeChanged() {
-    final source = widget.store.source;
     if (!mounted) return;
     setState(() {
       if ((!SourceSite.isAvailable(hongguoFindSourceId) ||
