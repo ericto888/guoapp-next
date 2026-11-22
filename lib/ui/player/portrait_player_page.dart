@@ -1074,7 +1074,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               children: [
                 Expanded(
                   child: Text(
-                    '第 ${session.episode.number} 集  |  ${description.isEmpty ? '暂无简介' : description}',
+                    '${session.episode.label}  |  ${description.isEmpty ? '暂无简介' : description}',
                     maxLines: _descExpanded ? null : 2,
                     overflow: _descExpanded ? null : TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1136,7 +1136,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 ),
               ),
               Text(
-                '第 ${session.episode.number} 集',
+                '${session.episode.label}',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: .78),
                   fontSize: 12,
