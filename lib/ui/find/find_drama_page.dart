@@ -37,7 +37,6 @@ class FindDramaPageState extends State<FindDramaPage> {
   _FindMode _mode = _FindMode.rank;
   String _shown = '';
   DramaFeed? _filterFeed;
-  CategoryFilterPanel? _filterPanel;
   Set<String> _filterIds = {};
   String _filterGenre = '';
   int _filterOffset = 0;
@@ -91,7 +90,6 @@ class FindDramaPageState extends State<FindDramaPage> {
     if (_mode == _FindMode.filter) {
       _filterFeed?.dispose();
       _filterFeed = null;
-      _filterPanel = null;
       _filterIds.clear();
     }
     explore.select(id);
@@ -152,7 +150,6 @@ class FindDramaPageState extends State<FindDramaPage> {
         genre == _filterGenre ? _filterIds : <String>{},
       );
       if (!mounted || chosen == null) return;
-      _filterPanel = panel;
       _filterIds = chosen;
       _filterGenre = genre;
       _filterOffset = 0;
@@ -266,37 +263,21 @@ class FindDramaPageState extends State<FindDramaPage> {
                           ],
                         ),
                       ),
-                      if (row.singleChoice)
-                        RadioGroup<String>(
-                          groupValue: row.items.any((item) => selected.contains(item.id))
-                              ? row.items.firstWhere((item) => selected.contains(item.id)).id
-                              : '',
-                          onChanged: (value) => update(() {
-                            selected.removeAll(row.items.map((item) => item.id));
-                            if (value != null && value.isNotEmpty) selected.add(value);
-                          }),
-                          child: Column(
-                            children: [
-                              const RadioListTile<String>(
-                                value: '',
-                                title: Text('不限'),
-                                dense: true,
-                              ),
-                              for (final item in row.items)
-                                RadioListTile<String>(
-                                  value: item.id,
-                                  title: Text(item.name),
-                                  dense: true,
-                                ),
-                            ],
-                          ),
-                        )
-                      else
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: [
-                            for (final item in row.items)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          for (final item in row.items)
+                            if (row.singleChoice)
+                              ChoiceChip(
+                                label: Text(item.name),
+                                selected: selected.contains(item.id),
+                                onSelected: (checked) => update(() {
+                                  selected.removeAll(row.items.map((entry) => entry.id));
+                                  if (checked) selected.add(item.id);
+                                }),
+                              )
+                            else
                               FilterChip(
                                 label: Text(item.name),
                                 selected: selected.contains(item.id),
@@ -308,8 +289,8 @@ class FindDramaPageState extends State<FindDramaPage> {
                                   }
                                 }),
                               ),
-                          ],
-                        ),
+                        ],
+                      ),
                       const Divider(height: 20),
                     ],
                   ],
