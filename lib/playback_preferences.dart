@@ -13,7 +13,7 @@ const danmakuColors = [
   0xFF8CF08C,
 ];
 
-enum TelevisionDecoder { optimized, hardware, software }
+enum TelevisionDecoder { optimized, hardware, software, hardwareDirect }
 
 enum DanmakuCoverage {
   quarter(.25, '顶部四分之一'),
@@ -104,6 +104,7 @@ class PlaybackPreferences {
     this.autoHideControls = true,
     this.hideSystemBars = true,
     this.portraitStyleForWide = false,
+    this.directPlay = false,
     this.autoPictureInPicture = false,
     this.videoFit = VideoFit.auto,
     VideoFit? portraitVideoFit,
@@ -140,6 +141,7 @@ class PlaybackPreferences {
   final bool autoHideControls;
   final bool hideSystemBars;
   final bool portraitStyleForWide;
+  final bool directPlay;
   final bool autoPictureInPicture;
   /// Legacy shared value retained for older settings payloads.
   final VideoFit videoFit;
@@ -178,6 +180,7 @@ class PlaybackPreferences {
     bool? autoHideControls,
     bool? hideSystemBars,
     bool? portraitStyleForWide,
+    bool? directPlay,
     bool? autoPictureInPicture,
     VideoFit? videoFit,
     VideoFit? portraitVideoFit,
@@ -209,6 +212,7 @@ class PlaybackPreferences {
     autoHideControls: autoHideControls ?? this.autoHideControls,
     hideSystemBars: hideSystemBars ?? this.hideSystemBars,
     portraitStyleForWide: portraitStyleForWide ?? this.portraitStyleForWide,
+    directPlay: directPlay ?? this.directPlay,
     autoPictureInPicture: autoPictureInPicture ?? this.autoPictureInPicture,
     videoFit: videoFit ?? this.videoFit,
     portraitVideoFit: portraitVideoFit ?? this.portraitVideoFit,
@@ -242,6 +246,7 @@ class PlaybackPreferences {
     'autoHideControls': autoHideControls,
     'hideSystemBars': hideSystemBars,
     'portraitStyleForWide': portraitStyleForWide,
+    'directPlay': directPlay,
     'autoPictureInPicture': autoPictureInPicture,
     'videoFit': videoFit.name,
     'portraitVideoFit': portraitVideoFit.name,
@@ -305,6 +310,7 @@ class PlaybackPreferences {
       autoHideControls: value['autoHideControls'] as bool? ?? true,
       hideSystemBars: value['hideSystemBars'] as bool? ?? true,
       portraitStyleForWide: value['portraitStyleForWide'] as bool? ?? false,
+      directPlay: value['directPlay'] as bool? ?? false,
       autoPictureInPicture: value['autoPictureInPicture'] as bool? ?? false,
       videoFit: VideoFit.values.asNameMap()[value['videoFit']] ?? VideoFit.auto,
       portraitVideoFit:
