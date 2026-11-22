@@ -190,7 +190,11 @@ class SettingsSection extends StatelessWidget {
             title: '解码方式',
             subtitle: '有声音没画面或卡顿时可换兼容方式，下次打开视频时生效',
             options: Platform.isAndroid
-                ? {..._decoders, TelevisionDecoder.hardwareDirect: '硬解（直通）'}
+                ? {
+                    ..._decoders,
+                    TelevisionDecoder.hardwareSwapUv: '硬解（修正偏蓝）',
+                    TelevisionDecoder.hardwareDirect: '硬解（直通）',
+                  }
                 : _decoders,
             value: preferences.televisionDecoder,
             onChanged: (decoder) => savePreferences(
