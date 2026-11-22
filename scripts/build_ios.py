@@ -1,4 +1,5 @@
 import argparse
+import base64
 import os
 import platform
 import re
@@ -137,20 +138,40 @@ def main():
             shutil.copy2(package, destination)
             artifacts.append(destination)
     else:
-        try:
-            run([flutter, 'build', 'ios', '--release', '--no-codesign', '--no-pub', *app.flutter_arguments])
-        except subprocess.CalledProcessError:
-            # 仅当 Xcode 已生成 Runner.app 时才继续；后续仍执行全部产物校验。
-            candidates = list((root / 'build' / 'ios').rglob('Runner.app'))
-            application = next(
-                (candidate for candidate in candidates if (candidate / 'Runner').is_file()),
-                None,
+        # Flutter 3.47+ 在某些 Xcode 版本上会在 --no-codesign 后仍执行
+        # Development Team 部署检查。直接调用同一 Runner workspace，并在
+        # xcodebuild 层明确关闭签名，仍由 Flutter 的 Xcode build phases 编译 Dart。
+        derived = root / 'build' / 'ios' / 'DerivedData'
+        if derived.exists():
+            shutil.rmtree(derived)
+        arguments = [
+            'xcodebuild',
+            '-workspace', str(root / 'ios' / 'Runner.xcworkspace'),
+            '-scheme', 'Runner',
+            '-configuration', 'Release',
+            '-sdk', 'iphoneos',
+            '-destination', 'generic/platform=iOS',
+            '-derivedDataPath', str(derived),
+            'CODE_SIGNING_ALLOWED=NO',
+            'CODE_SIGNING_REQUIRED=NO',
+            'CODE_SIGN_IDENTITY=',
+            'DEVELOPMENT_TEAM=',
+        ]
+        defines = [
+            argument.removeprefix('--dart-define=')
+            for argument in app.flutter_arguments
+            if argument.startswith('--dart-define=')
+        ]
+        if defines:
+            encoded = ','.join(
+                base64.b64encode(value.encode('utf-8')).decode('ascii')
+                for value in defines
             )
-            if application is None:
-                raise
-            print('Flutter 部署检查返回非零，继续验证已生成的未签名 Runner.app。', flush=True)
-        else:
-            application = root / 'build' / 'ios' / 'iphoneos' / 'Runner.app'
+            arguments.append('DART_DEFINES=' + encoded)
+        run(arguments)
+        application = (
+            derived / 'Build' / 'Products' / 'Release-iphoneos' / 'Runner.app'
+        )
         validate_unsigned_application(application)
         symbols = subprocess.check_output(['xcrun', 'nm', '-gU', str(application / 'Runner')], text=True)
         for symbol in ['_DuanjuRequest', '_DuanjuFree']:
