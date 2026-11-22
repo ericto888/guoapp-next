@@ -37,7 +37,7 @@ class FindDramaPageState extends State<FindDramaPage> {
   _FindMode _mode = _FindMode.rank;
   String _shown = '';
   DramaFeed? _filterFeed;
-  Set<String> _filterIds = {};
+  final Set<String> _filterIds = {};
   String _filterGenre = '';
   CategoryFilterPanel? _filterPanel;
   bool _filterPanelLoading = false;
@@ -161,9 +161,10 @@ class FindDramaPageState extends State<FindDramaPage> {
     if (_filterPanelKey == key || _filterPanelLoading) return;
     _filterPanelLoading = true;
     _filterPanelKey = key;
+    final repository = AppScope.of(context).repository;
     try {
-      await AppScope.of(context).repository.cancelCategoryFilters();
-      final panel = await AppScope.of(context).repository.categoryFilterPanel(
+      await repository.cancelCategoryFilters();
+      final panel = await repository.categoryFilterPanel(
         source.id,
         genre: genre,
       );
