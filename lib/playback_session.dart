@@ -27,6 +27,15 @@ Size? videoDisplaySize(VideoParams parameters) {
       : Size(width.toDouble(), height.toDouble());
 }
 
+bool audioOnly(Tracks tracks) {
+  bool real(String id) => id != 'auto' && id != 'no';
+  return tracks.audio.any((track) => real(track.id)) &&
+      !tracks.video.any(
+        (track) =>
+            real(track.id) && track.albumart != true && track.image != true,
+      );
+}
+
 String _diagnostic(Object error) {
   final text = error.toString().replaceAll(
     RegExp(r'[a-z]+://\S+', caseSensitive: false),
@@ -109,6 +118,7 @@ class PlaybackSession extends ChangeNotifier {
       _videoSize = size;
       _syncVideoFitForSize(size);
     }
+    if (audioOnly(player.state.tracks)) _audioDetected = true;
     _buffering(player.state.buffering);
     final stream = player.stream;
     _subscriptions.addAll([
@@ -136,6 +146,11 @@ class PlaybackSession extends ChangeNotifier {
       }),
       for (final changes in [stream.duration, stream.buffer, stream.rate])
         changes.listen((_) => _sync()),
+      stream.tracks.listen((tracks) {
+        if (_audioDetected || !audioOnly(tracks)) return;
+        _audioDetected = true;
+        _notify();
+      }),
       stream.videoParams.listen((parameters) {
         final size = videoDisplaySize(parameters);
         if (size == null || _closed) return;
@@ -254,6 +269,7 @@ class PlaybackSession extends ChangeNotifier {
   bool _locked = false;
   bool _engaged;
   bool _staleAudio = false;
+  bool _audioDetected = false;
   bool _stalled = false;
   String _loadingMessage = '正在准备播放';
   String? _error;
@@ -314,6 +330,7 @@ class PlaybackSession extends ChangeNotifier {
     null => 9 / 16,
   };
   bool get aspectKnown => _videoSize != null;
+  bool get audio => episode.audio || _audioDetected;
   VideoFit get videoFit => _videoFit;
   bool get wideVideoSource =>
       _videoSize != null && _videoSize!.width >= _videoSize!.height;
