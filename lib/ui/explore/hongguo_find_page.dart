@@ -603,7 +603,9 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       allItem,
       ...items.where((item) => item.id.isNotEmpty),
     ];
-    final label = row.type == 'genre' ? '全部体裁' : row.name.trim();
+    final label = row.type == 'genre'
+        ? '全部体裁'
+        : row.name.trim();
     Widget chip(CategoryFilterItem item) => row.singleChoice
         ? ChoiceChip(
             label: Text(
@@ -636,7 +638,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
       child: Row(
         children: [
           SizedBox(
-            width: 100,
+            width: 82,
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -651,7 +653,7 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
