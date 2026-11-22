@@ -16,6 +16,7 @@ class SourceBar extends StatelessWidget {
     this.televisionLeading,
     this.leading = const [],
     this.actions = const [],
+    this.showSwitcher = true,
   });
   final List<Widget> leading;
   final String source;
@@ -25,6 +26,7 @@ class SourceBar extends StatelessWidget {
   final TextEditingController? searchController;
   final Widget? televisionLeading;
   final List<Widget> actions;
+  final bool showSwitcher;
 
   @override
   Widget build(BuildContext context) {
@@ -45,13 +47,18 @@ class SourceBar extends StatelessWidget {
     return switch (form) {
       FormFactor.phone => PageHeader(
         title: source,
-        actions: [...leading, switcher, search, ...actions],
+        actions: [
+          ...leading,
+          if (showSwitcher) switcher,
+          search,
+          ...actions,
+        ],
       ),
       FormFactor.pad || FormFactor.window => PageHeader(
         title: source,
         actions: [
           ...leading,
-          switcher,
+          if (showSwitcher) switcher,
           const SizedBox(width: 4),
           SizedBox(
             width: MediaQuery.sizeOf(context).width >= 900 ? 320 : 240,
@@ -76,7 +83,7 @@ class SourceBar extends StatelessWidget {
               source,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-            switcher,
+            if (showSwitcher) switcher,
             search,
             ...actions,
           ],
