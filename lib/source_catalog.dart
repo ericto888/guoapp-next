@@ -99,11 +99,12 @@ class SourceCatalog {
   }
 
   Future<CatalogPage> recommendations({
+    String genre = recommendGenre,
     bool more = false,
     bool force = false,
   }) => repository.recommendations(
     source.id,
-    recommendGenre,
+    genre,
     more: more,
     force: force,
   );
