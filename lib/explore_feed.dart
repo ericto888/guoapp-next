@@ -43,8 +43,9 @@ class ExploreFeed extends ChangeNotifier {
   bool get recommending => _tab.id == recommendTab.id;
 
   bool get groupedRankings =>
-      _catalog?.source.id == 'hongguo' &&
-      _catalog!.boards.any((board) => board.id.startsWith('hongguo-native-'));
+      _catalog?.boards.any(
+        (board) => board.id.startsWith('hongguo-native-'),
+      ) == true;
 
   List<CatalogCategory> get genreTabs => const [
     CatalogCategory('all', '全部'),
