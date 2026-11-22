@@ -18,6 +18,28 @@ func nativeRecommendationKey(source, genre string) string {
 	return source + "|recommendation:" + genre
 }
 
+// Recommendation providers exchange provider-native IDs in the seen list.
+// LibraryDrama.ID is the app-wide ID (for example, "hongguo:123"), while
+// SourceID is the raw ID expected by the provider's pagination API.
+func nativeRecommendationSeen(items []LibraryDrama, fallback []string) []string {
+	if len(items) == 0 {
+		return fallback
+	}
+	seen := make([]string, 0, min(540, len(items)))
+	known := make(map[string]bool, len(items))
+	for _, drama := range items[max(0, len(items)-540):] {
+		id := drama.SourceID
+		if id == "" {
+			id = drama.ID
+		}
+		if id != "" && !known[id] {
+			known[id] = true
+			seen = append(seen, id)
+		}
+	}
+	return seen
+}
+
 func (engine *nativeEngine) recommender(source string) (Recommender, error) {
 	if engine.downloader != nil {
 		if p, ok := engine.downloader.provider(source); ok {
@@ -83,7 +105,7 @@ func (engine *nativeEngine) nativeRecommendations(ctx context.Context, input nat
 	if input.Force || !found {
 		state = nativeRecommendationState{HasMore: true}
 	}
-	page, err := recommender.Recommendations(ctx, genre, state.Query, state.Seen)
+	page, err := recommender.Recommendations(ctx, genre, state.Query, nativeRecommendationSeen(cached.Items, state.Seen))
 	if err != nil {
 		if len(cached.Items) == 0 || errors.Is(err, context.Canceled) {
 			return nativeCatalogResult{}, err
@@ -129,7 +151,13 @@ func (engine *nativeEngine) nativeRecommendations(ctx context.Context, input nat
 	items := mergeNativeCatalog(previous, fresh)
 	identifiers := make([]string, 0, min(540, len(items)))
 	for _, drama := range items[max(0, len(items)-540):] {
-		identifiers = append(identifiers, drama.ID)
+		id := drama.SourceID
+		if id == "" {
+			id = drama.ID
+		}
+		if id != "" {
+			identifiers = append(identifiers, id)
+		}
 	}
 	state.Query, state.Seen = page.Cursor, identifiers
 	state.Page++
