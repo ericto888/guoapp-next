@@ -358,7 +358,13 @@ class FindDramaPageState extends State<FindDramaPage> {
                                         final item = row.items.firstWhere(
                                           (item) => item.name == name,
                                         );
-                                        _selectFilterItem(explore, row, item.id);
+                                        setState(() => _filterIds.remove(item.id));
+                                        unawaited(
+                                          _reloadCategoryFilterResults(
+                                            explore,
+                                            _filterGenre,
+                                          ),
+                                        );
                                       },
                                       visualDensity: VisualDensity.compact,
                                       materialTapTargetSize:
