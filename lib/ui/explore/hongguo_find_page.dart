@@ -579,47 +579,48 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
   ) {
     final colors = Theme.of(context).colorScheme;
     final selected = _selected[row.type] ?? const <String>{};
-    return Row(
+    final maxChipWidth = MediaQuery.sizeOf(context).width - 96;
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (row.type != 'genre')
-          SizedBox(
-            width: 52,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 9),
-              child: Text(
-                row.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
+        if (row.type != 'genre') ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              row.name,
+              softWrap: true,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colors.onSurfaceVariant,
               ),
             ),
           ),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final item in items)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: row.singleChoice
-                        ? ChoiceChip(
-                            label: Text(item.name),
-                            selected: selected.contains(item.id) || (item.id.isEmpty && selected.isEmpty),
-                            onSelected: (_) => _selectFilter(row, item),
-                            visualDensity: VisualDensity.compact,
-                          )
-                        : FilterChip(
-                            label: Text(item.name),
-                            selected: selected.contains(item.id) || (item.id.isEmpty && selected.isEmpty),
-                            onSelected: (_) => _selectFilter(row, item),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                  ),
-              ],
-            ),
-          ),
+        ],
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final item in items)
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxChipWidth),
+                child: row.singleChoice
+                    ? ChoiceChip(
+                        label: Text(item.name, softWrap: true),
+                        selected: selected.contains(item.id) ||
+                            (item.id.isEmpty && selected.isEmpty),
+                        onSelected: (_) => _selectFilter(row, item),
+                        visualDensity: VisualDensity.compact,
+                      )
+                    : FilterChip(
+                        label: Text(item.name, softWrap: true),
+                        selected: selected.contains(item.id) ||
+                            (item.id.isEmpty && selected.isEmpty),
+                        onSelected: (_) => _selectFilter(row, item),
+                        visualDensity: VisualDensity.compact,
+                      ),
+              ),
+          ],
         ),
       ],
     );
