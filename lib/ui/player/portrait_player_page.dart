@@ -445,7 +445,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   Future<void> _openEpisodes() => showPlayerSheet(
     context,
-    (_) => _EpisodeSheet(
+    (_) => EpisodeSheet(
       session: _session,
       onSeasons: () => unawaited(_openSeasons()),
       canDownload:
@@ -1409,8 +1409,8 @@ class _Shade extends StatelessWidget {
   );
 }
 
-class _EpisodeSheet extends StatefulWidget {
-  const _EpisodeSheet({
+class EpisodeSheet extends StatefulWidget {
+  const EpisodeSheet({
     required this.session,
     required this.onSeasons,
     required this.canDownload,
@@ -1422,10 +1422,10 @@ class _EpisodeSheet extends StatefulWidget {
   final ValueChanged<List<int>> onDownload;
 
   @override
-  State<_EpisodeSheet> createState() => _EpisodeSheetState();
+  State<EpisodeSheet> createState() => EpisodeSheetState();
 }
 
-class _EpisodeSheetState extends State<_EpisodeSheet> {
+class EpisodeSheetState extends State<EpisodeSheet> {
   final _selected = <int>{};
   bool _selecting = false;
 
