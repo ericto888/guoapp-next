@@ -193,6 +193,27 @@ class PictureInPicture extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Immediately applies the user's automatic PiP preference to the active
+  /// iOS controller. Settings can be changed while the playback route remains
+  /// mounted, so waiting for the next player sync can leave AVKit's old value.
+  void setAutoEnter(bool enabled) {
+    if (!_ios || !_supported || _iosSent == null) return;
+    final current = _iosSent!;
+    final next = (
+      player: current.player,
+      playing: current.playing,
+      autoEnter: enabled && current.playing,
+    );
+    if (_iosSent == next) return;
+    _iosSent = next;
+    unawaited(_updateIOS(
+      next.player,
+      next.playing,
+      next.autoEnter,
+      ++_iosUpdate,
+    ));
+  }
+
   void clear() {
     if (_ios) {
       if (_iosSent == null) return;
