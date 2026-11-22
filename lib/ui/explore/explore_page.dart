@@ -164,20 +164,52 @@ class ExplorePageState extends State<ExplorePage> {
         FormFactor.pad || FormFactor.window => 24.0,
         FormFactor.television => televisionInset,
       };
-      final tabs = Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: form == FormFactor.phone ? 0 : inset,
-        ),
-        child: CategoryTabs<String>(
-          key: _tabsKey,
-          options: [
-            for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name),
-          ],
-          selected: explore.tab.id,
-          onSelected: _selectTab,
-          onShowAll: _pickCategory,
-        ),
+      final tabInset = EdgeInsets.symmetric(
+        horizontal: form == FormFactor.phone ? 0 : inset,
       );
+      final tabs = explore.groupedRankings
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: tabInset,
+                  child: CategoryTabs<String>(
+                    options: [
+                      for (final genre in explore.genreTabs)
+                        ChoiceOption(genre.id, genre.name),
+                    ],
+                    selected: explore.genre.id,
+                    onSelected: explore.selectGenre,
+                  ),
+                ),
+                Padding(
+                  padding: tabInset,
+                  child: CategoryTabs<String>(
+                    key: _tabsKey,
+                    options: [
+                      for (final tab in explore.tabs)
+                        ChoiceOption(tab.id, tab.name),
+                    ],
+                    selected: explore.tab.id,
+                    onSelected: _selectTab,
+                    onShowAll: _pickCategory,
+                  ),
+                ),
+              ],
+            )
+          : Padding(
+              padding: tabInset,
+              child: CategoryTabs<String>(
+                key: _tabsKey,
+                options: [
+                  for (final tab in explore.tabs)
+                    ChoiceOption(tab.id, tab.name),
+                ],
+                selected: explore.tab.id,
+                onSelected: _selectTab,
+                onShowAll: _pickCategory,
+              ),
+            );
       return Scaffold(
         body: SafeArea(
           bottom: false,
