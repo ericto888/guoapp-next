@@ -11,7 +11,10 @@ import 'source_catalog.dart';
 
 const recommendTab = CatalogCategory('app:recommend', '推荐');
 
-CatalogCategory rankingTab(RankingBoard board) {
+CatalogCategory rankingTab(RankingBoard board) =>
+    CatalogCategory('app:rank:${board.id}', board.name);
+
+CatalogCategory _findRankingTab(RankingBoard board) {
   final name = board.name.replaceFirst(
     RegExp(r'^(全部|真人剧|漫剧|AI剧)\s*[·•]\s*'),
     '',
@@ -96,7 +99,7 @@ class ExploreFeed extends ChangeNotifier {
     final catalog = _catalog;
     if (catalog == null) return const [];
     if (rankingMode && groupedRankings) {
-      return [for (final board in _visibleBoards) rankingTab(board)];
+      return [for (final board in _visibleBoards) _findRankingTab(board)];
     }
     final [all, ...genres] = catalog.categories;
     return [
