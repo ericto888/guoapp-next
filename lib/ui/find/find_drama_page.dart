@@ -140,6 +140,7 @@ class FindDramaPageState extends State<FindDramaPage> {
     listenable: Listenable.merge([_explore!, widget.store]),
     builder: (context, _) {
       final explore = _explore!;
+      _resetScroll(explore);
       final source = explore.source;
       final form = AppScope.formFactorOf(context);
       final television = form == FormFactor.television;
