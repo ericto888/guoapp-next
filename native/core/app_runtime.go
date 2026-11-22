@@ -89,6 +89,7 @@ type nativeInput struct {
 	FilterIDs       []string                `json:"filterIds"`
 	SeenIDs         []string                `json:"seenIds"`
 	Offset          int                     `json:"offset"`
+	FilterSessionID string                  `json:"filterSessionId"`
 	Drama           LibraryDrama            `json:"drama"`
 	Chapter         Chapter                 `json:"chapter"`
 	Index           int                     `json:"index"`
@@ -479,7 +480,7 @@ func nativeDispatch(input nativeInput) (any, error) {
 		if !ok {
 			return nil, errors.New("当前站源不支持多维分类筛选")
 		}
-		return filterer.CategoryFilterPage(ctx, input.Genre, input.FilterIDs, input.Offset, input.Session, input.SeenIDs)
+		return filterer.CategoryFilterPage(ctx, input.Genre, input.FilterIDs, input.Offset, input.FilterSessionID, input.SeenIDs)
 	case "cover":
 		return engine.loadCover(ctx, input.Drama, input.Force)
 	case "prepareCover":
