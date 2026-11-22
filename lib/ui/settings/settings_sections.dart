@@ -11,6 +11,7 @@ import '../../download_preferences.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../../playback_preferences.dart';
+import '../../picture_in_picture.dart';
 import '../../resource_settings.dart';
 import '../../resource_settings_editor.dart';
 import '../../window_on_top.dart';
@@ -314,9 +315,12 @@ class SettingsSection extends StatelessWidget {
               title: '离开应用时自动小窗',
               subtitle: '播放中回到桌面时自动进入画中画',
               value: preferences.autoPictureInPicture,
-              onChanged: (value) => savePreferences(
-                preferences.copyWith(autoPictureInPicture: value),
-              ),
+              onChanged: (value) {
+                PictureInPicture.instance.setAutoEnter(value);
+                savePreferences(
+                  preferences.copyWith(autoPictureInPicture: value),
+                );
+              },
             ),
           ],
         ),
