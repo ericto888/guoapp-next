@@ -10,6 +10,7 @@ import (
 )
 
 type nativePlaybackChoice struct {
+	source        string
 	danmakuSource string
 	danmakuSeries string
 	danmakuVideo  string
@@ -92,7 +93,7 @@ func (engine *nativeEngine) nativeOpenPlayback(ctx context.Context, choice nativ
 	if err != nil {
 		return nativePlan{}, err
 	}
-	plan.URL, choice.streamSession = stream.nativeOpen(media)
+	plan.URL, choice.streamSession = stream.nativeOpen(choice.source, media)
 	plan.Epoch = epoch
 	choice.created = time.Now()
 	engine.mu.Lock()
