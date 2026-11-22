@@ -138,8 +138,10 @@ class FindDramaPageState extends State<FindDramaPage> {
     final source = explore.source;
     if (source == null || source.id != 'hongguo-self') return;
     final genre = _genreFor(explore);
+    final repository = AppScope.of(context).repository;
     try {
-      final panel = await AppScope.of(context).repository.categoryFilterPanel(
+      await repository.cancelCategoryFilters();
+      final panel = await repository.categoryFilterPanel(
         source.id,
         genre: genre,
       );
@@ -156,7 +158,6 @@ class FindDramaPageState extends State<FindDramaPage> {
       _filterSessionId = '';
       _filterSeenIds.clear();
       _filterFeed?.dispose();
-      final repository = AppScope.of(context).repository;
       final feed = DramaFeed(
         load: (page, force) async {
           if (page <= 1 || force) {
