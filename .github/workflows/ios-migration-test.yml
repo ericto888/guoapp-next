@@ -52,6 +52,9 @@ jobs:
           go version
           flutter --version
           flutter precache --ios
+      - name: Test native Go core
+        working-directory: native
+        run: go test ./...
       - name: Build unsigned iOS IPA
         run: python scripts/build_ios.py
       - uses: actions/upload-artifact@v4
