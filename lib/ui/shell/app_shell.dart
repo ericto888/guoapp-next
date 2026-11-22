@@ -157,10 +157,11 @@ class _AppShellState extends State<AppShell> {
 
   void _storeChanged() {
     final source = widget.store.source;
-    if (!mounted || source == _source) return;
+    if (!mounted) return;
     _source = source;
     setState(() {
-      if (source != hongguoSourceId && _tab == AppTab.find) {
+      if ((source != hongguoSourceId || !widget.store.findDramaTab) &&
+          _tab == AppTab.find) {
         _tab = AppTab.explore;
       }
     });
@@ -171,7 +172,10 @@ class _AppShellState extends State<AppShell> {
       if (switch (tab) {
         AppTab.history =>
           widget.store.historyTab && !AppScope.of(context).television,
-        AppTab.find => widget.store.source == hongguoSourceId,
+        AppTab.find =>
+          widget.store.source == hongguoSourceId &&
+          widget.store.findDramaTab &&
+          !AppScope.of(context).television,
         AppTab.explore || AppTab.follow || AppTab.mine => true,
       })
         tab,
