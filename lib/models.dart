@@ -278,6 +278,525 @@ class Episode {
 
   static final _numbered = RegExp(
     r'^(第|ep|e)?\s*\d+\s*[集章话話回期节節]?
+  DramaDetail(
+    this.drama,
+    this.episodes, {
+    this.warning = '',
+    this.seasons = const [],
+  });
+  final Drama drama;
+  final List<Episode> episodes;
+  final String warning;
+  final List<DramaSeason> seasons;
+
+  DramaSeason? get nextSeason {
+    final index = seasons.indexWhere((season) => season.drama.id == drama.id);
+    return index < 0 || index + 1 >= seasons.length ? null : seasons[index + 1];
+  }
+
+  factory DramaDetail.fromJson(Map<String, dynamic> json) {
+    final rows = json['chapters'] as List? ?? const [];
+    return DramaDetail(
+      Drama.fromJson(Map<String, dynamic>.from(json['drama'] as Map)),
+      [
+        for (var i = 0; i < rows.length; i++)
+          Episode(Map<String, dynamic>.from(rows[i] as Map), i + 1),
+      ],
+      warning: json['warning'] as String? ?? '',
+    );
+  }
+}
+
+class DramaSeason {
+  const DramaSeason({required this.number, required this.drama});
+  final int number;
+  final Drama drama;
+
+  String get label => '第$number季';
+
+  bool get upcoming {
+    final date = DateTime.tryParse(drama.onlineDate);
+    if (date == null) return drama.episodes == 0;
+    final now = DateTime.now();
+    return date.isAfter(DateTime(now.year, now.month, now.day));
+  }
+
+  String? get onlineLabel {
+    final date = DateTime.tryParse(drama.onlineDate);
+    if (date == null) return null;
+    String two(int value) => value.toString().padLeft(2, '0');
+    final day = '${two(date.month)}-${two(date.day)}';
+    return upcoming ? '$day 待上线' : '$day 上线';
+  }
+
+  factory DramaSeason.fromJson(Map<String, dynamic> json) => DramaSeason(
+    number: json['number'] as int? ?? 0,
+    drama: Drama.fromJson(Map<String, dynamic>.from(json['drama'] as Map)),
+  );
+}
+
+class CatalogPage {
+  CatalogPage(
+    this.items, {
+    this.hasMore = false,
+    this.warning = '',
+    this.page = 1,
+    this.fresh = false,
+  });
+  final List<Drama> items;
+  final bool hasMore;
+  final String warning;
+  final int page;
+  final bool fresh;
+  factory CatalogPage.fromJson(Map<String, dynamic> json) => CatalogPage(
+    [
+      for (final row in json['items'] as List? ?? const [])
+        Drama.fromJson(Map<String, dynamic>.from(row as Map)),
+    ],
+    hasMore: json['hasMore'] == true,
+    warning: json['warning'] as String? ?? '',
+    page: intValue(json['page']) > 0 ? intValue(json['page']) : 1,
+    fresh: json['fresh'] == true,
+  );
+}
+
+class PlaybackPlan {
+  const PlaybackPlan({
+    required this.url,
+    this.headers = const {},
+    this.decryptionKey = '',
+    this.quality = 0,
+    this.qualities = const [],
+    this.session = '',
+    this.danmakuId = '',
+    this.prefetchedBytes = 0,
+    this.expiresAt = 0,
+    this.routeIndex = 0,
+    this.routeCount = 1,
+    this.streamEpoch = 0,
+    this.local = false,
+  });
+  final String url;
+  final Map<String, String> headers;
+  final String decryptionKey;
+  final int quality;
+  final List<int> qualities;
+  final String session;
+  final String danmakuId;
+  final int prefetchedBytes;
+  final int expiresAt;
+  final int routeIndex;
+  final int routeCount;
+
+  /// 本机取流监听的代次；系统回收监听后该值变化，旧地址随之失效。
+  final int streamEpoch;
+  final bool local;
+  bool get hasAlternative => session.isNotEmpty && routeIndex + 1 < routeCount;
+  factory PlaybackPlan.fromJson(Map<String, dynamic> json) => PlaybackPlan(
+    url: json['url'] as String? ?? '',
+    local: json['local'] == true,
+    headers: (json['headers'] as Map? ?? {}).map(
+      (key, value) => MapEntry(key.toString(), value.toString()),
+    ),
+    decryptionKey: json['decryptionKey'] as String? ?? '',
+    quality: intValue(json['quality']),
+    qualities: (json['qualities'] as List? ?? []).map(intValue).toSet().toList()
+      ..sort((a, b) => b.compareTo(a)),
+    session: json['session'] as String? ?? '',
+    danmakuId: json['danmakuId'] as String? ?? '',
+    prefetchedBytes: intValue(json['prefetchedBytes']),
+    expiresAt: intValue(json['expiresAt']),
+    routeIndex: intValue(json['routeIndex']),
+    routeCount: intValue(json['routeCount']) > 0
+        ? intValue(json['routeCount'])
+        : 1,
+    streamEpoch: intValue(json['streamEpoch']),
+  );
+}
+
+class WatchEntry {
+  WatchEntry({
+    required this.drama,
+    required this.episode,
+    required this.position,
+    required this.duration,
+    required this.updatedAt,
+  });
+  final Drama drama;
+  final int episode;
+  final double position;
+  final double duration;
+  final DateTime updatedAt;
+  bool get finished => duration > 1 && position >= duration - 1;
+  Map<String, dynamic> toJson() => {
+    'drama': drama.toJson(),
+    'episode': episode,
+    'position': position,
+    'duration': duration,
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+  factory WatchEntry.fromJson(Map<String, dynamic> json) => WatchEntry(
+    drama: Drama.fromJson(Map<String, dynamic>.from(json['drama'] as Map)),
+    episode: intValue(json['episode']),
+    position: (json['position'] as num?)?.toDouble() ?? 0,
+    duration: (json['duration'] as num?)?.toDouble() ?? 0,
+    updatedAt:
+        DateTime.tryParse(json['updatedAt'].toString()) ?? DateTime(2000),
+  );
+}
+
+class DownloadJob {
+  const DownloadJob({
+    required this.id,
+    required this.drama,
+    required this.episode,
+    required this.state,
+    this.bytes = 0,
+    this.total = 0,
+    this.progress = 0,
+    this.quality = 0,
+    this.actualQuality = 0,
+    this.error = '',
+    this.created = 0,
+    this.revision = 0,
+    this.archived = false,
+  });
+  final int created;
+  final int revision;
+  final bool archived;
+  final String id;
+  final Drama drama;
+  final Episode episode;
+  final String state;
+  final int bytes;
+  final int total;
+  final double progress;
+  final int quality;
+  final int actualQuality;
+  final String error;
+  bool get completed => state == 'completed';
+  bool get active => state == 'queued' || state == 'downloading';
+  bool get resumable => state == 'paused' || state == 'failed';
+  bool get converting => state == 'converting';
+  String get stateLabel => switch (state) {
+    'queued' => '等待下载',
+    'downloading' => '正在下载',
+    'converting' => '正在处理',
+    'paused' => '已暂停',
+    'failed' => '下载失败',
+    'completed' => '已下载',
+    'removing' => '正在取消',
+    _ => '等待更新',
+  };
+  factory DownloadJob.fromJson(Map<String, dynamic> value) => DownloadJob(
+    id: value['id'] as String? ?? '',
+    drama: Drama.fromJson(Map<String, dynamic>.from(value['drama'] as Map)),
+    episode: Episode(
+      Map<String, dynamic>.from(value['chapter'] as Map),
+      intValue(value['index']),
+    ),
+    state: value['state'] as String? ?? 'failed',
+    bytes: intValue(value['bytes']),
+    total: intValue(value['total']),
+    progress: ((value['progress'] as num?)?.toDouble() ?? 0).clamp(0, 1),
+    quality: intValue(value['quality']),
+    actualQuality: intValue(value['actualQuality']),
+    error: value['error'] as String? ?? '',
+    created: intValue(value['created']),
+    revision: intValue(value['revision']),
+    archived: value['archived'] == true,
+  );
+}
+
+typedef DownloadConversion = ({String input, String key, String output});
+typedef CastDevice = ({String id, String name});
+typedef CastStatus = ({String state, double position, double duration});
+
+List<Map<String, dynamic>> readJsonList(String? value) {
+  try {
+    return (jsonDecode(value ?? '[]') as List)
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  } catch (_) {
+    return [];
+  }
+}
+,
+    caseSensitive: false,
+  );
+
+  bool get named {
+    final text = title.trim();
+    return text.isNotEmpty && !_numbered.hasMatch(text);
+  }
+
+  String get label => named ? title.trim() : '第 $number 集';
+}
+
+bool episodesNamed(List<Episode> episodes) =>
+    episodes.where((episode) => episode.named).length * 2 > episodes.length;
+
+
+class DramaDetail {
+  DramaDetail(
+    this.drama,
+    this.episodes, {
+    this.warning = '',
+    this.seasons = const [],
+  });
+  final Drama drama;
+  final List<Episode> episodes;
+  final String warning;
+  final List<DramaSeason> seasons;
+
+  DramaSeason? get nextSeason {
+    final index = seasons.indexWhere((season) => season.drama.id == drama.id);
+    return index < 0 || index + 1 >= seasons.length ? null : seasons[index + 1];
+  }
+
+  factory DramaDetail.fromJson(Map<String, dynamic> json) {
+    final rows = json['chapters'] as List? ?? const [];
+    return DramaDetail(
+      Drama.fromJson(Map<String, dynamic>.from(json['drama'] as Map)),
+      [
+        for (var i = 0; i < rows.length; i++)
+          Episode(Map<String, dynamic>.from(rows[i] as Map), i + 1),
+      ],
+      warning: json['warning'] as String? ?? '',
+    );
+  }
+}
+
+class DramaSeason {
+  const DramaSeason({required this.number, required this.drama});
+  final int number;
+  final Drama drama;
+
+  String get label => '第$number季';
+
+  bool get upcoming {
+    final date = DateTime.tryParse(drama.onlineDate);
+    if (date == null) return drama.episodes == 0;
+    final now = DateTime.now();
+    return date.isAfter(DateTime(now.year, now.month, now.day));
+  }
+
+  String? get onlineLabel {
+    final date = DateTime.tryParse(drama.onlineDate);
+    if (date == null) return null;
+    String two(int value) => value.toString().padLeft(2, '0');
+    final day = '${two(date.month)}-${two(date.day)}';
+    return upcoming ? '$day 待上线' : '$day 上线';
+  }
+
+  factory DramaSeason.fromJson(Map<String, dynamic> json) => DramaSeason(
+    number: json['number'] as int? ?? 0,
+    drama: Drama.fromJson(Map<String, dynamic>.from(json['drama'] as Map)),
+  );
+}
+
+class CatalogPage {
+  CatalogPage(
+    this.items, {
+    this.hasMore = false,
+    this.warning = '',
+    this.page = 1,
+    this.fresh = false,
+  });
+  final List<Drama> items;
+  final bool hasMore;
+  final String warning;
+  final int page;
+  final bool fresh;
+  factory CatalogPage.fromJson(Map<String, dynamic> json) => CatalogPage(
+    [
+      for (final row in json['items'] as List? ?? const [])
+        Drama.fromJson(Map<String, dynamic>.from(row as Map)),
+    ],
+    hasMore: json['hasMore'] == true,
+    warning: json['warning'] as String? ?? '',
+    page: intValue(json['page']) > 0 ? intValue(json['page']) : 1,
+    fresh: json['fresh'] == true,
+  );
+}
+
+class PlaybackPlan {
+  const PlaybackPlan({
+    required this.url,
+    this.headers = const {},
+    this.decryptionKey = '',
+    this.quality = 0,
+    this.qualities = const [],
+    this.session = '',
+    this.danmakuId = '',
+    this.prefetchedBytes = 0,
+    this.expiresAt = 0,
+    this.routeIndex = 0,
+    this.routeCount = 1,
+    this.streamEpoch = 0,
+    this.local = false,
+  });
+  final String url;
+  final Map<String, String> headers;
+  final String decryptionKey;
+  final int quality;
+  final List<int> qualities;
+  final String session;
+  final String danmakuId;
+  final int prefetchedBytes;
+  final int expiresAt;
+  final int routeIndex;
+  final int routeCount;
+
+  /// 本机取流监听的代次；系统回收监听后该值变化，旧地址随之失效。
+  final int streamEpoch;
+  final bool local;
+  bool get hasAlternative => session.isNotEmpty && routeIndex + 1 < routeCount;
+  factory PlaybackPlan.fromJson(Map<String, dynamic> json) => PlaybackPlan(
+    url: json['url'] as String? ?? '',
+    local: json['local'] == true,
+    headers: (json['headers'] as Map? ?? {}).map(
+      (key, value) => MapEntry(key.toString(), value.toString()),
+    ),
+    decryptionKey: json['decryptionKey'] as String? ?? '',
+    quality: intValue(json['quality']),
+    qualities: (json['qualities'] as List? ?? []).map(intValue).toSet().toList()
+      ..sort((a, b) => b.compareTo(a)),
+    session: json['session'] as String? ?? '',
+    danmakuId: json['danmakuId'] as String? ?? '',
+    prefetchedBytes: intValue(json['prefetchedBytes']),
+    expiresAt: intValue(json['expiresAt']),
+    routeIndex: intValue(json['routeIndex']),
+    routeCount: intValue(json['routeCount']) > 0
+        ? intValue(json['routeCount'])
+        : 1,
+    streamEpoch: intValue(json['streamEpoch']),
+  );
+}
+
+class WatchEntry {
+  WatchEntry({
+    required this.drama,
+    required this.episode,
+    required this.position,
+    required this.duration,
+    required this.updatedAt,
+  });
+  final Drama drama;
+  final int episode;
+  final double position;
+  final double duration;
+  final DateTime updatedAt;
+  bool get finished => duration > 1 && position >= duration - 1;
+  Map<String, dynamic> toJson() => {
+    'drama': drama.toJson(),
+    'episode': episode,
+    'position': position,
+    'duration': duration,
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+  factory WatchEntry.fromJson(Map<String, dynamic> json) => WatchEntry(
+    drama: Drama.fromJson(Map<String, dynamic>.from(json['drama'] as Map)),
+    episode: intValue(json['episode']),
+    position: (json['position'] as num?)?.toDouble() ?? 0,
+    duration: (json['duration'] as num?)?.toDouble() ?? 0,
+    updatedAt:
+        DateTime.tryParse(json['updatedAt'].toString()) ?? DateTime(2000),
+  );
+}
+
+class DownloadJob {
+  const DownloadJob({
+    required this.id,
+    required this.drama,
+    required this.episode,
+    required this.state,
+    this.bytes = 0,
+    this.total = 0,
+    this.progress = 0,
+    this.quality = 0,
+    this.actualQuality = 0,
+    this.error = '',
+    this.created = 0,
+    this.revision = 0,
+    this.archived = false,
+  });
+  final int created;
+  final int revision;
+  final bool archived;
+  final String id;
+  final Drama drama;
+  final Episode episode;
+  final String state;
+  final int bytes;
+  final int total;
+  final double progress;
+  final int quality;
+  final int actualQuality;
+  final String error;
+  bool get completed => state == 'completed';
+  bool get active => state == 'queued' || state == 'downloading';
+  bool get resumable => state == 'paused' || state == 'failed';
+  bool get converting => state == 'converting';
+  String get stateLabel => switch (state) {
+    'queued' => '等待下载',
+    'downloading' => '正在下载',
+    'converting' => '正在处理',
+    'paused' => '已暂停',
+    'failed' => '下载失败',
+    'completed' => '已下载',
+    'removing' => '正在取消',
+    _ => '等待更新',
+  };
+  factory DownloadJob.fromJson(Map<String, dynamic> value) => DownloadJob(
+    id: value['id'] as String? ?? '',
+    drama: Drama.fromJson(Map<String, dynamic>.from(value['drama'] as Map)),
+    episode: Episode(
+      Map<String, dynamic>.from(value['chapter'] as Map),
+      intValue(value['index']),
+    ),
+    state: value['state'] as String? ?? 'failed',
+    bytes: intValue(value['bytes']),
+    total: intValue(value['total']),
+    progress: ((value['progress'] as num?)?.toDouble() ?? 0).clamp(0, 1),
+    quality: intValue(value['quality']),
+    actualQuality: intValue(value['actualQuality']),
+    error: value['error'] as String? ?? '',
+    created: intValue(value['created']),
+    revision: intValue(value['revision']),
+    archived: value['archived'] == true,
+  );
+}
+
+typedef DownloadConversion = ({String input, String key, String output});
+typedef CastDevice = ({String id, String name});
+typedef CastStatus = ({String state, double position, double duration});
+
+List<Map<String, dynamic>> readJsonList(String? value) {
+  try {
+    return (jsonDecode(value ?? '[]') as List)
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  } catch (_) {
+    return [];
+  }
+}
+,
+    caseSensitive: false,
+  );
+
+  bool get named {
+    final text = title.trim();
+    return text.isNotEmpty && !_numbered.hasMatch(text);
+  }
+
+  String get label => named ? title.trim() : '第 $number 集';
+}
+
+bool episodesNamed(List<Episode> episodes) =>
+    episodes.where((episode) => episode.named).length * 2 > episodes.length;
 
 class DramaDetail {
   DramaDetail(
