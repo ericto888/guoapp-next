@@ -1017,7 +1017,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 19,
+                fontSize: 14,
                 fontWeight: FontWeight.w800,
                 height: 1.3,
                 shadows: [Shadow(color: Color(0x88000000), blurRadius: 4)],
@@ -1180,10 +1180,14 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     ),
   );
 
-  Widget _progress(BuildContext context) => PlaybackProgressBuilder(
-    player: _session.player,
-    active: _chromeShown,
-    builder: _progressBar,
+  Widget _progress(BuildContext context) => StreamBuilder<bool>(
+    stream: _session.player.stream.playing,
+    initialData: _session.player.state.playing,
+    builder: (context, snapshot) => PlaybackProgressBuilder(
+      player: _session.player,
+      active: _chromeShown,
+      builder: _progressBar,
+    ),
   );
 
   Widget _progressBar(BuildContext context) {
@@ -1207,7 +1211,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       data: SliderTheme.of(context).copyWith(
         trackHeight: widePortrait ? (dragging ? 4 : 2) : (dragging ? 6 : 3),
         padding: EdgeInsets.zero,
-        activeTrackColor: widePortrait ? hongguoProgress : colors.primary,
+        activeTrackColor: widePortrait
+            ? (state.playing ? hongguoTrack : const Color(0xFFFF9800))
+            : colors.primary,
         thumbColor: widePortrait ? hongguoProgress : colors.primary,
         inactiveTrackColor: widePortrait
             ? hongguoTrack
