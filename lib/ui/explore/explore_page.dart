@@ -23,6 +23,7 @@ import '../widgets/status_view.dart';
 import '../widgets/swipe_switch.dart';
 import 'explore_hero.dart';
 import 'source_actions.dart';
+import 'hongguo_find_page.dart';
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key, required this.store});
@@ -164,20 +165,52 @@ class ExplorePageState extends State<ExplorePage> {
         FormFactor.pad || FormFactor.window => 24.0,
         FormFactor.television => televisionInset,
       };
-      final tabs = Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: form == FormFactor.phone ? 0 : inset,
-        ),
-        child: CategoryTabs<String>(
-          key: _tabsKey,
-          options: [
-            for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name),
-          ],
-          selected: explore.tab.id,
-          onSelected: _selectTab,
-          onShowAll: _pickCategory,
-        ),
+      final tabInset = EdgeInsets.symmetric(
+        horizontal: form == FormFactor.phone ? 0 : inset,
       );
+      final tabs = explore.groupedRankings
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: tabInset,
+                  child: CategoryTabs<String>(
+                    options: [
+                      for (final genre in explore.genreTabs)
+                        ChoiceOption(genre.id, genre.name),
+                    ],
+                    selected: explore.genre.id,
+                    onSelected: explore.selectGenre,
+                  ),
+                ),
+                Padding(
+                  padding: tabInset,
+                  child: CategoryTabs<String>(
+                    key: _tabsKey,
+                    options: [
+                      for (final tab in explore.tabs)
+                        ChoiceOption(tab.id, tab.name),
+                    ],
+                    selected: explore.tab.id,
+                    onSelected: _selectTab,
+                    onShowAll: _pickCategory,
+                  ),
+                ),
+              ],
+            )
+          : Padding(
+              padding: tabInset,
+              child: CategoryTabs<String>(
+                key: _tabsKey,
+                options: [
+                  for (final tab in explore.tabs)
+                    ChoiceOption(tab.id, tab.name),
+                ],
+                selected: explore.tab.id,
+                onSelected: _selectTab,
+                onShowAll: _pickCategory,
+              ),
+            );
       return Scaffold(
         body: SafeArea(
           bottom: false,
@@ -210,14 +243,25 @@ class ExplorePageState extends State<ExplorePage> {
                       ),
                   ],
                 ),
-              if (!television || explore.feed!.items.isEmpty) tabs,
-              Expanded(
-                child: _swipeTabs(
-                  explore,
-                  form,
-                  _content(explore, inset, television, tabs),
+              if (explore.groupedRankings)
+                Expanded(
+                  child: HongguoFindPage(
+                    key: ValueKey(source.id),
+                    explore: explore,
+                    store: widget.store,
+                    onOpen: _open,
+                  ),
+                )
+              else ...[
+                if (!television || explore.feed!.items.isEmpty) tabs,
+                Expanded(
+                  child: _swipeTabs(
+                    explore,
+                    form,
+                    _content(explore, inset, television, tabs),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
