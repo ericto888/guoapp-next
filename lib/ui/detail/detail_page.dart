@@ -1173,6 +1173,7 @@ class _DetailPageState extends State<DetailPage> {
             ? _currentEpisode
             : ValueKey('episode-${episode.number}'),
         episode: episode,
+        named: episodesNamed(details.episodes),
         metrics: m,
         current: index == current,
         watched: current != null && index < current,
@@ -1182,7 +1183,9 @@ class _DetailPageState extends State<DetailPage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = m.columnsFor(constraints.maxWidth);
+        final columns = episodesNamed(details.episodes)
+            ? 1
+            : m.columnsFor(constraints.maxWidth);
         final fade = Motion.of(context, Motion.medium);
         return TweenAnimationBuilder<double>(
           tween: Tween(begin: fade == Duration.zero ? 1 : 0, end: 1),
@@ -1570,12 +1573,14 @@ class _EpisodeCell extends StatelessWidget {
   const _EpisodeCell({
     super.key,
     required this.episode,
+    required this.named,
     required this.metrics,
     required this.current,
     required this.watched,
     required this.onPressed,
   });
   final Episode episode;
+  final bool named;
   final _Metrics metrics;
   final bool current;
   final bool watched;
@@ -1591,7 +1596,7 @@ class _EpisodeCell extends StatelessWidget {
       radius: metrics.cellRadius,
       child: Semantics(
         button: true,
-        label: '第 ${episode.number} 集${episode.vip ? '，VIP' : ''}',
+        label: '${named ? episode.label : '第 ${episode.number} 集'}${episode.vip ? '，VIP' : ''}',
         excludeSemantics: true,
         child: Material(
           color: current ? colors.primaryContainer : colors.surfaceContainer,
@@ -1602,24 +1607,55 @@ class _EpisodeCell extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Center(
-                  child: Text(
-                    '${episode.number}',
-                    style: TextStyle(
-                      fontSize: metrics.cellText,
-                      fontWeight: current
-                          ? FontWeight.w800
-                          : watched
-                          ? FontWeight.w400
-                          : FontWeight.w600,
-                      color: current
-                          ? colors.onPrimaryContainer
-                          : watched
-                          ? colors.onSurfaceVariant
-                          : colors.onSurface,
+                if (named)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      14,
+                      0,
+                      episode.vip ? 36 : 14,
+                      0,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        episode.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: metrics.cellText,
+                          fontWeight: current
+                              ? FontWeight.w800
+                              : watched
+                              ? FontWeight.w400
+                              : FontWeight.w600,
+                          color: current
+                              ? colors.onPrimaryContainer
+                              : watched
+                              ? colors.onSurfaceVariant
+                              : colors.onSurface,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Center(
+                    child: Text(
+                      '${episode.number}',
+                      style: TextStyle(
+                        fontSize: metrics.cellText,
+                        fontWeight: current
+                            ? FontWeight.w800
+                            : watched
+                            ? FontWeight.w400
+                            : FontWeight.w600,
+                        color: current
+                            ? colors.onPrimaryContainer
+                            : watched
+                            ? colors.onSurfaceVariant
+                            : colors.onSurface,
+                      ),
                     ),
                   ),
-                ),
                 if (episode.vip)
                   Positioned(
                     right: 5,
