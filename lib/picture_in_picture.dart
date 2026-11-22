@@ -164,7 +164,7 @@ class PictureInPicture extends ChangeNotifier {
       );
       if (_iosSent == next) return;
       _iosSent = next;
-      unawaited(_updateIOS(iosPlayer, playing, autoEnter, ++_iosUpdate));
+      unawaited(_updateIOS(iosPlayer, playing, next.autoEnter, ++_iosUpdate));
       return;
     }
     final next = <String, Object>{
