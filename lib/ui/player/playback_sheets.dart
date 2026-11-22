@@ -26,6 +26,7 @@ Future<void> showPlayerSheet(
   BuildContext context,
   WidgetBuilder builder, {
   bool dark = true,
+  bool fitContent = false,
 }) {
   final theme = dark ? playerTheme(context) : Theme.of(context);
   final height = MediaQuery.sizeOf(context).height * .6;
@@ -34,7 +35,9 @@ Future<void> showPlayerSheet(
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: theme.colorScheme.surfaceContainerLow,
-    constraints: BoxConstraints.tightFor(height: height),
+    constraints: fitContent
+        ? BoxConstraints(maxHeight: height)
+        : BoxConstraints.tightFor(height: height),
     builder: (context) => Theme(
       data: theme,
       child: DefaultTextStyle.merge(
