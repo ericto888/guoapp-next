@@ -1,6 +1,9 @@
 name: Validate Hongguo category filter bridge
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - feature/hongguo-category-filter-bridge
