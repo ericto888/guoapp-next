@@ -1011,13 +1011,67 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_keepWidePortraitChrome)
+              ListenableBuilder(
+                listenable: session.danmaku,
+                builder: (context, _) {
+                  final enabled = session.danmaku.enabled;
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Tooltip(
+                      message: enabled ? '关闭弹幕' : '开启弹幕',
+                      child: Material(
+                        color: Colors.black.withValues(alpha: .32),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => session.danmaku.setEnabled(!enabled),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  enabled
+                                      ? Icons.subtitles_rounded
+                                      : Icons.subtitles_off_rounded,
+                                  size: 15,
+                                  color: enabled
+                                      ? const Color(0xFFFFA23A)
+                                      : Colors.white70,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  enabled ? '弹幕开' : '弹幕关',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            if (_keepWidePortraitChrome) const SizedBox(height: 7),
             Text(
               drama.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 19,
+                fontSize: 14,
                 fontWeight: FontWeight.w800,
                 height: 1.3,
                 shadows: [Shadow(color: Color(0x88000000), blurRadius: 4)],
@@ -1180,10 +1234,14 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     ),
   );
 
-  Widget _progress(BuildContext context) => PlaybackProgressBuilder(
-    player: _session.player,
-    active: _chromeShown,
-    builder: _progressBar,
+  Widget _progress(BuildContext context) => StreamBuilder<bool>(
+    stream: _session.player.stream.playing,
+    initialData: _session.player.state.playing,
+    builder: (context, snapshot) => PlaybackProgressBuilder(
+      player: _session.player,
+      active: _chromeShown,
+      builder: _progressBar,
+    ),
   );
 
   Widget _progressBar(BuildContext context) {
@@ -1200,15 +1258,16 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     final colors = Theme.of(context).colorScheme;
     final widePortrait = _keepWidePortraitChrome;
     // 横片竖持采用红果风格的深色细进度条；原生竖片保留主题色样式。
-    const hongguoProgress = Color(0xFFC83A36);
     const hongguoTrack = Color(0xFF383838);
     const hongguoBuffered = Color(0xFF666666);
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
         trackHeight: widePortrait ? (dragging ? 4 : 2) : (dragging ? 6 : 3),
         padding: EdgeInsets.zero,
-        activeTrackColor: widePortrait ? hongguoProgress : colors.primary,
-        thumbColor: widePortrait ? hongguoProgress : colors.primary,
+        activeTrackColor: widePortrait
+            ? (state.playing ? hongguoTrack : const Color(0xFFEF6C00))
+            : colors.primary,
+        thumbColor: widePortrait ? Colors.white : colors.primary,
         inactiveTrackColor: widePortrait
             ? hongguoTrack
             : Colors.white.withValues(alpha: .25),
