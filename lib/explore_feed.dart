@@ -15,10 +15,13 @@ CatalogCategory rankingTab(RankingBoard board) =>
     CatalogCategory('app:rank:${board.id}', board.name);
 
 CatalogCategory _findRankingTab(RankingBoard board) {
-  final name = board.name.replaceFirst(
+  var name = board.name.trim().replaceFirst(
     RegExp(r'^(全部|真人剧|漫剧|AI剧)\s*[·•]\s*'),
     '',
   );
+  if (name.isNotEmpty && !name.endsWith('榜')) {
+    name = '${name}榜';
+  }
   return CatalogCategory('app:rank:${board.id}', name);
 }
 
@@ -140,7 +143,7 @@ class ExploreFeed extends ChangeNotifier {
     return [
       if (catalog.recommends) recommendTab,
       all,
-      for (final board in _generalBoards) rankingTab(board),
+      for (final board in _generalBoards) _findRankingTab(board),
       ...genres,
     ];
   }
