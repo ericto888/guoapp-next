@@ -190,20 +190,25 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     setState(() {
       final values = _selected.putIfAbsent(row.type, () => <String>{});
       if (item.id.isEmpty) {
+        for (final id in values) {
+          _selectedNames.remove(id);
+        }
         values.clear();
       } else if (row.singleChoice) {
+        for (final id in values) {
+          if (id != item.id) _selectedNames.remove(id);
+        }
         values
           ..clear()
           ..add(item.id);
+        _selectedNames[item.id] = item.name;
       } else if (!values.add(item.id)) {
         values.remove(item.id);
-      }
-      if (values.isEmpty) _selected.remove(row.type);
-      if (item.id.isEmpty || !_selected.values.any((set) => set.contains(item.id))) {
-        _selectedNames.removeWhere((id, _) => id == item.id);
+        _selectedNames.remove(item.id);
       } else {
         _selectedNames[item.id] = item.name;
       }
+      if (values.isEmpty) _selected.remove(row.type);
     });
     _reloadFilterResults();
   }
