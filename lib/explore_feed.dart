@@ -52,19 +52,28 @@ class ExploreFeed extends ChangeNotifier {
   List<CatalogCategory> get tabs {
     final catalog = _catalog;
     if (catalog == null) return const [];
-    if (usesHongguoGenreTabs) {
-      return [
-        if (catalog.recommends) recommendTab,
-        for (final board in catalog.boards)
-          if (_boardMatchesGenre(board)) rankingTab(board),
-      ];
-    }
     final [all, ...genres] = catalog.categories;
     return [
       if (catalog.recommends) recommendTab,
       all,
       for (final board in catalog.boards) rankingTab(board),
       ...genres,
+    ];
+  }
+
+  List<CatalogCategory> get rankingTabs {
+    final catalog = _catalog;
+    if (catalog == null) return const [];
+    if (!usesHongguoGenreTabs) {
+      return [
+        for (final tab in tabs)
+          if (tab.id.isEmpty || tab.id.startsWith('app:')) tab,
+      ];
+    }
+    return [
+      if (catalog.recommends) recommendTab,
+      for (final board in catalog.boards)
+        if (_boardMatchesGenre(board)) rankingTab(board),
     ];
   }
 
@@ -87,7 +96,7 @@ class ExploreFeed extends ChangeNotifier {
     final selected = genreTabs.where((item) => item.id == id).firstOrNull;
     if (selected == null) return;
     _genre = selected;
-    final nextTabs = tabs;
+    final nextTabs = rankingTabs;
     final next = nextTabs.where((item) => item.id == recommendTab.id).firstOrNull ??
         nextTabs.firstOrNull;
     if (next != null) {
