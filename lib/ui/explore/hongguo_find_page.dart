@@ -606,8 +606,8 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
     final label = row.type == 'genre'
         ? '全部主题'
         : row.name.trim().isEmpty
-        ? '全部'
-        : '全部${row.name}';
+            ? '全部'
+            : '全部${row.name}';
     Widget chip(CategoryFilterItem item) => row.singleChoice
         ? ChoiceChip(
             label: Text(
