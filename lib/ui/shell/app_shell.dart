@@ -9,6 +9,7 @@ import '../../download_overview.dart';
 import '../../follow_updater.dart';
 import '../../local_store.dart';
 import '../../models.dart';
+import '../explore/hongguo_find_module.dart';
 import '../app_scope.dart';
 import '../explore/explore_page.dart';
 import '../explore/source_actions.dart';
@@ -25,6 +26,7 @@ import '../widgets/source_bar.dart';
 
 enum AppTab {
   explore('发现', Icons.explore_outlined, Icons.explore),
+  find('找剧', Icons.search_rounded, Icons.search_rounded),
   follow('追剧', Icons.bookmark_border_rounded, Icons.bookmark_rounded),
   history('历史', Icons.history_rounded, Icons.history_rounded),
   mine('我的', Icons.person_outline_rounded, Icons.person_rounded);
@@ -99,6 +101,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    widget.store.addListener(_storeChanged);
     FocusManager.instance.addListener(_followFocus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -128,6 +131,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    widget.store.removeListener(_storeChanged);
     FocusManager.instance.removeListener(_followFocus);
     for (final node in _tabFocus) {
       node.dispose();
@@ -149,11 +153,21 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
+  void _storeChanged() {
+    if (!mounted) return;
+    setState(() {
+      if (widget.store.source != hongguoSourceId && _tab == AppTab.find) {
+        _tab = AppTab.explore;
+      }
+    });
+  }
+
   List<AppTab> get _tabs => [
     for (final tab in AppTab.values)
       if (switch (tab) {
         AppTab.history =>
           widget.store.historyTab && !AppScope.of(context).television,
+        AppTab.find => widget.store.source == hongguoSourceId,
         AppTab.explore || AppTab.follow || AppTab.mine => true,
       })
         tab,
@@ -235,6 +249,7 @@ class _AppShellState extends State<AppShell> {
 
   Widget _root(AppTab tab) => switch (tab) {
     AppTab.explore => ExplorePage(key: _explore, store: widget.store),
+    AppTab.find => HongguoFindModule(store: widget.store),
     AppTab.follow => FollowPage(
       store: widget.store,
       entryFocus: _followEntry,
@@ -344,7 +359,7 @@ class _AppShellState extends State<AppShell> {
                         final entry = switch (_tab) {
                           AppTab.follow => _followEntry,
                           AppTab.mine => _mineEntry,
-                          AppTab.explore || AppTab.history => null,
+                          AppTab.explore || AppTab.find || AppTab.history => null,
                         };
                         if (event is KeyUpEvent ||
                             event.logicalKey != LogicalKeyboardKey.arrowDown ||
