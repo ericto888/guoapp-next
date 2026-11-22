@@ -187,7 +187,9 @@ class SettingsSection extends StatelessWidget {
           ValueTile<TelevisionDecoder>(
             title: '解码方式',
             subtitle: '有声音没画面或卡顿时可换兼容方式，下次打开视频时生效',
-            options: _decoders,
+            options: Platform.isAndroid
+                ? {..._decoders, TelevisionDecoder.hardwareDirect: '硬解（直通）'}
+                : _decoders,
             value: preferences.televisionDecoder,
             onChanged: (decoder) => savePreferences(
               preferences.copyWith(televisionDecoder: decoder),
@@ -201,6 +203,15 @@ class SettingsSection extends StatelessWidget {
             onChanged: (value) =>
                 savePreferences(preferences.copyWith(preopen: value)),
           ),
+          if (!television)
+            SwitchTile(
+              title: '点开剧集直接播放',
+              subtitle: '跳过详情页直接进入播放，返回时回到发现页',
+              value: preferences.directPlay,
+              onChanged: (value) => savePreferences(
+                preferences.copyWith(directPlay: value),
+              ),
+            ),
           if (!television)
             SwitchTile(
               title: '横屏视频也使用竖屏样式',
