@@ -85,7 +85,6 @@ type LibraryMoreKey struct{}
 
 type LibraryKnownKey struct{}
 
-type Suggester interface {
 type CategoryFilterer interface {
 	CategoryPanel(ctx context.Context, genre string) (CategoryFilterPanel, error)
 	CategoryFilterPage(ctx context.Context, genre string, filterIDs []string, offset int, sessionID string, seenIDs []string) (CategoryFilterPage, error)
@@ -115,7 +114,7 @@ type CategoryFilterPage struct {
 	SessionID  string  `json:"sessionId"`
 }
 
-
+type Suggester interface {
 	Suggestions(ctx context.Context, query string) ([]string, error)
 }
 
