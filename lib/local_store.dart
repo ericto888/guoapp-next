@@ -39,6 +39,7 @@ const _backupFlags = {
   'deleteAfterManualExport',
   'televisionKeyboard',
   'historyTab',
+  'findDramaTab',
   'pureBlack',
   'blurCoversButton',
   'blurCoversOnLaunch',
@@ -472,6 +473,7 @@ class LocalStore extends ChangeNotifier {
 
   bool get televisionKeyboard => _flag('televisionKeyboard', false);
   bool get historyTab => _flag('historyTab', true);
+  bool get findDramaTab => _flag('findDramaTab', false);
   bool get pureBlack => _flag('pureBlack', false);
   bool get blurCoversButton => _flag('blurCoversButton', false);
   String get blurCoversLaunch => switch (_settings['blurCoversLaunch']) {
@@ -620,6 +622,7 @@ class LocalStore extends ChangeNotifier {
   Future<void> setTelevisionKeyboard(bool value) =>
       _setting('televisionKeyboard', value);
   Future<void> setHistoryTab(bool value) => _setting('historyTab', value);
+  Future<void> setFindDramaTab(bool value) => _setting('findDramaTab', value);
   Future<void> setPureBlack(bool value) => _setting('pureBlack', value);
   Future<void> setBlurCoversButton(bool value) =>
       _setting('blurCoversButton', value);
