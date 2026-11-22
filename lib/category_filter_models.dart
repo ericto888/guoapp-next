@@ -59,8 +59,7 @@ class CategoryFilterPanel {
 
   Set<String> get validItemIds => {
     for (final row in rows)
-      for (final item in row.items)
-        item.id,
+      for (final item in row.items) item.id,
   };
 }
 

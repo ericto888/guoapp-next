@@ -193,9 +193,9 @@ class FindDramaPageState extends State<FindDramaPage> {
       if (mounted) _toTop();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('加载红果筛选失败：$error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('加载红果筛选失败：$error')));
     }
   }
 
@@ -231,7 +231,10 @@ class FindDramaPageState extends State<FindDramaPage> {
                     const Expanded(
                       child: Text(
                         '红果多维筛选',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     TextButton(
@@ -253,12 +256,16 @@ class FindDramaPageState extends State<FindDramaPage> {
                             Expanded(
                               child: Text(
                                 row.name,
-                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                             TextButton(
                               onPressed: () => update(() {
-                                selected.removeAll(row.items.map((item) => item.id));
+                                selected.removeAll(
+                                  row.items.map((item) => item.id),
+                                );
                               }),
                               child: const Text('不限'),
                             ),
@@ -275,7 +282,9 @@ class FindDramaPageState extends State<FindDramaPage> {
                                 label: Text(item.name),
                                 selected: selected.contains(item.id),
                                 onSelected: (checked) => update(() {
-                                  selected.removeAll(row.items.map((entry) => entry.id));
+                                  selected.removeAll(
+                                    row.items.map((entry) => entry.id),
+                                  );
                                   if (checked) selected.add(item.id);
                                 }),
                               )
@@ -374,7 +383,8 @@ class FindDramaPageState extends State<FindDramaPage> {
       }
 
       final options = _options(explore);
-      if (options.isNotEmpty && !options.any((tab) => tab.id == explore.tab.id)) {
+      if (options.isNotEmpty &&
+          !options.any((tab) => tab.id == explore.tab.id)) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) explore.select(options.first.id);
         });
@@ -445,9 +455,12 @@ class FindDramaPageState extends State<FindDramaPage> {
                               : '已选：${explore.tab.name}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ),
                       if (source.id == 'hongguo-self')
@@ -492,12 +505,18 @@ class FindDramaPageState extends State<FindDramaPage> {
                                                 ? feed.error
                                                 : '当前分类暂时没有可展示的内容。',
                                             action: '重试',
-                                            onAction: () => feed.reload(force: true),
+                                            onAction: () =>
+                                                feed.reload(force: true),
                                           ),
                                   )
                                 else ...[
                                   SliverPadding(
-                                    padding: EdgeInsets.fromLTRB(inset, 16, inset, 0),
+                                    padding: EdgeInsets.fromLTRB(
+                                      inset,
+                                      16,
+                                      inset,
+                                      0,
+                                    ),
                                     sliver: DramaSliverGrid(
                                       width: constraints.maxWidth - inset * 2,
                                       items: visibleItems,
@@ -505,7 +524,9 @@ class FindDramaPageState extends State<FindDramaPage> {
                                       onOpen: _open,
                                     ),
                                   ),
-                                  SliverToBoxAdapter(child: FeedFooter(feed: feed)),
+                                  SliverToBoxAdapter(
+                                    child: FeedFooter(feed: feed),
+                                  ),
                                 ],
                               ],
                             ),
