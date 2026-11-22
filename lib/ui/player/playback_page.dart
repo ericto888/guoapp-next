@@ -10,6 +10,7 @@ import '../../local_store.dart';
 import '../../picture_in_picture.dart';
 import '../../playback_session.dart';
 import '../app_scope.dart';
+import 'audio_player_page.dart';
 import 'upstream_landscape_player_page.dart' as upstream;
 import 'landscape_player_page.dart' as custom_landscape;
 import 'mini_player.dart';
@@ -47,6 +48,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
   final _pageScope = FocusScopeNode(debugLabel: 'playbackPage');
   final _pip = PictureInPicture.instance;
   bool _wideVideo = false;
+  late bool _audio = _session.audio;
   MediaQueryData? _media;
   bool _shown = false;
   bool _locked = false;
@@ -61,7 +63,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
     aspectKnown: _session.aspectKnown,
     aspectRatio: _session.aspectRatio,
     currentWide: _wideVideo,
-  );
+  ) && !_session.audio;
 
   bool _wideAutoRotationApplied = false;
 
@@ -126,8 +128,14 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _bind();
     _sync();
     final wide = _measure();
+    final audio = _session.audio;
     final swapped = !identical(previous, _bound);
-    if (wide != _wideVideo || swapped) setState(() => _wideVideo = wide);
+    if (wide != _wideVideo || audio != _audio || swapped) {
+      setState(() {
+        _wideVideo = wide;
+        _audio = audio;
+      });
+    }
     _syncWideAutoRotation(wide: wide);
     if (_session.locked != _locked) {
       _locked = _session.locked;
@@ -204,6 +212,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
       autoEnter:
           playing &&
           !_television &&
+          !_audio &&
           widget.store.playbackPreferences.autoPictureInPicture,
     );
     _pip.resize(session.aspectRatio);
@@ -334,6 +343,13 @@ class _PlaybackPageState extends State<PlaybackPage> {
   Widget _page(BuildContext context) {
     final form = AppScope.formFactorOf(context);
     final mini = _pip.available ? () => unawaited(_enterMini()) : null;
+    if (_audio && form != FormFactor.television) {
+      return AudioPlayerPage(
+        store: widget.store,
+        handle: widget.handle,
+        onMiniWindow: mini,
+      );
+    }
     final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
     if (desktopPlatform) {
       final size = MediaQuery.sizeOf(context);
