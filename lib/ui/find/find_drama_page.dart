@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../explore_feed.dart';
+import '../../drama_feed.dart';
+import '../../category_filter_models.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
@@ -34,6 +36,13 @@ class FindDramaPageState extends State<FindDramaPage> {
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
   _FindMode _mode = _FindMode.rank;
   String _shown = '';
+  DramaFeed? _filterFeed;
+  CategoryFilterPanel? _filterPanel;
+  Set<String> _filterIds = {};
+  String _filterGenre = '';
+  int _filterOffset = 0;
+  String _filterSessionId = '';
+  final Set<String> _filterSeenIds = {};
 
   @override
   void didChangeDependencies() {
@@ -44,6 +53,7 @@ class FindDramaPageState extends State<FindDramaPage> {
   @override
   void dispose() {
     _explore?.dispose();
+    _filterFeed?.dispose();
     _scroll.dispose();
     _search.dispose();
     super.dispose();
@@ -77,6 +87,12 @@ class FindDramaPageState extends State<FindDramaPage> {
     if (id == explore.tab.id) {
       if (_scroll.hasClients && _scroll.offset > 0) _toTop();
       return;
+    }
+    if (_mode == _FindMode.filter) {
+      _filterFeed?.dispose();
+      _filterFeed = null;
+      _filterPanel = null;
+      _filterIds.clear();
     }
     explore.select(id);
     _toTop();
@@ -115,6 +131,207 @@ class FindDramaPageState extends State<FindDramaPage> {
     if (value != null) _selectTab(explore, value);
   }
 
+  String _genreFor(ExploreFeed explore) => switch (explore.tab.id) {
+    'short_play' || 'comic_series' || 'ai_series' => explore.tab.id,
+    _ => '',
+  };
+
+  Future<void> _openCategoryFilters(ExploreFeed explore) async {
+    final source = explore.source;
+    if (source == null || source.id != 'hongguo-self') return;
+    final genre = _genreFor(explore);
+    try {
+      final panel = await AppScope.of(context).repository.categoryFilterPanel(
+        source.id,
+        genre: genre,
+      );
+      if (!mounted) return;
+      final chosen = await _showCategoryFilterSheet(
+        context,
+        panel,
+        genre == _filterGenre ? _filterIds : <String>{},
+      );
+      if (!mounted || chosen == null) return;
+      _filterPanel = panel;
+      _filterIds = chosen;
+      _filterGenre = genre;
+      _filterOffset = 0;
+      _filterSessionId = '';
+      _filterSeenIds.clear();
+      _filterFeed?.dispose();
+      final repository = AppScope.of(context).repository;
+      final feed = DramaFeed(
+        load: (page, force) async {
+          if (page <= 1 || force) {
+            _filterOffset = 0;
+            _filterSessionId = '';
+            _filterSeenIds.clear();
+          }
+          final result = await repository.categoryFilterPage(
+            source.id,
+            genre: genre,
+            filterIds: _filterIds.toList(),
+            offset: _filterOffset,
+            sessionId: _filterSessionId,
+            seenIds: _filterSeenIds.toList(),
+          );
+          _filterOffset = result.nextOffset;
+          _filterSessionId = result.sessionId;
+          final dramas = [
+            for (final item in result.items) Drama.fromJson(item),
+          ];
+          for (final drama in dramas) {
+            final id = drama.sourceId.isNotEmpty
+                ? drama.sourceId
+                : drama.id.split(':').last;
+            if (id.isNotEmpty) _filterSeenIds.add(id);
+          }
+          return CatalogPage(dramas, hasMore: result.hasMore, page: page);
+        },
+      );
+      _filterFeed = feed;
+      setState(() {});
+      await feed.reload(force: true);
+      if (mounted) _toTop();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('加载红果筛选失败：$error')),
+      );
+    }
+  }
+
+  Future<void> _refresh(ExploreFeed explore) async {
+    if (_mode == _FindMode.filter && _filterFeed != null) {
+      await _filterFeed!.reload(force: true);
+    } else {
+      await explore.refresh();
+    }
+  }
+
+  Future<Set<String>?> _showCategoryFilterSheet(
+    BuildContext context,
+    CategoryFilterPanel panel,
+    Set<String> initial,
+  ) => showModalBottomSheet<Set<String>>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      var selected = Set<String>.of(initial);
+      return StatefulBuilder(
+        builder: (context, update) => SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.78,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        '红果多维筛选',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => update(() => selected.clear()),
+                      child: const Text('清空全部'),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    for (final row in panel.rows) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                row.name,
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => update(() {
+                                selected.removeAll(row.items.map((item) => item.id));
+                              }),
+                              child: const Text('不限'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (row.singleChoice)
+                        RadioGroup<String>(
+                          groupValue: row.items.any((item) => selected.contains(item.id))
+                              ? row.items.firstWhere((item) => selected.contains(item.id)).id
+                              : '',
+                          onChanged: (value) => update(() {
+                            selected.removeAll(row.items.map((item) => item.id));
+                            if (value != null && value.isNotEmpty) selected.add(value);
+                          }),
+                          child: Column(
+                            children: [
+                              const RadioListTile<String>(
+                                value: '',
+                                title: Text('不限'),
+                                dense: true,
+                              ),
+                              for (final item in row.items)
+                                RadioListTile<String>(
+                                  value: item.id,
+                                  title: Text(item.name),
+                                  dense: true,
+                                ),
+                            ],
+                          ),
+                        )
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            for (final item in row.items)
+                              FilterChip(
+                                label: Text(item.name),
+                                selected: selected.contains(item.id),
+                                onSelected: (checked) => update(() {
+                                  if (checked) {
+                                    selected.add(item.id);
+                                  } else {
+                                    selected.remove(item.id);
+                                  }
+                                }),
+                              ),
+                          ],
+                        ),
+                      const Divider(height: 20),
+                    ],
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(sheetContext, selected),
+                    child: Text('查看结果（' + selected.length.toString() + ' 项已选）'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
   void _open(Drama drama) => openPage<void>(
     context,
     (_) => DetailPage(store: widget.store, drama: drama),
@@ -137,7 +354,11 @@ class FindDramaPageState extends State<FindDramaPage> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([_explore!, widget.store]),
+    listenable: Listenable.merge([
+      _explore!,
+      widget.store,
+      if (_filterFeed != null) _filterFeed!,
+    ]),
     builder: (context, _) {
       final explore = _explore!;
       _resetScroll(explore);
@@ -178,7 +399,12 @@ class FindDramaPageState extends State<FindDramaPage> {
       final selected = options.any((tab) => tab.id == explore.tab.id)
           ? explore.tab.id
           : options.firstOrNull?.id ?? '';
-      final feed = explore.feed;
+      final feed = _mode == _FindMode.filter && _filterFeed != null
+          ? _filterFeed
+          : explore.feed;
+      final visibleItems = _mode == _FindMode.filter && _filterFeed != null
+          ? _filterFeed!.items
+          : explore.items;
       final rankMode = _mode == _FindMode.rank;
       return Scaffold(
         body: SafeArea(
@@ -241,6 +467,12 @@ class FindDramaPageState extends State<FindDramaPage> {
                           ),
                         ),
                       ),
+                      if (source.id == 'hongguo-self')
+                        TextButton.icon(
+                          onPressed: () => _openCategoryFilters(explore),
+                          icon: const Icon(Icons.tune_rounded, size: 16),
+                          label: const Text('多维筛选'),
+                        ),
                       TextButton.icon(
                         onPressed: explore.tab.id.isEmpty
                             ? null
@@ -256,7 +488,7 @@ class FindDramaPageState extends State<FindDramaPage> {
                     ? const StatusView.loading()
                     : RefreshIndicator(
                         key: _refreshKey,
-                        onRefresh: explore.refresh,
+                        onRefresh: () => _refresh(explore),
                         child: LayoutBuilder(
                           builder: (context, constraints) => AutoLoadMore(
                             feed: feed,
@@ -285,8 +517,8 @@ class FindDramaPageState extends State<FindDramaPage> {
                                     padding: EdgeInsets.fromLTRB(inset, 16, inset, 0),
                                     sliver: DramaSliverGrid(
                                       width: constraints.maxWidth - inset * 2,
-                                      items: explore.items,
-                                      rankOf: rankMode ? explore.rankOf : null,
+                                      items: visibleItems,
+                                      rankOf: rankMode && _filterFeed == null ? explore.rankOf : null,
                                       onOpen: _open,
                                     ),
                                   ),
