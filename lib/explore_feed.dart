@@ -20,13 +20,14 @@ CatalogCategory rankingTab(RankingBoard board) {
 }
 
 class ExploreFeed extends ChangeNotifier {
-  ExploreFeed(this.repository, this.store) {
+  ExploreFeed(this.repository, this.store, {this.rankingMode = false}) {
     store.addListener(_storeChanged);
     repository.catalogUpdates.addListener(_metadataChanged);
     _open();
   }
   final AppRepository repository;
   final LocalStore store;
+  final bool rankingMode;
   SourceCatalog? _catalog;
   CatalogCategory _tab = CatalogCategory.all;
   CatalogCategory _genre = CatalogCategory('all', '全部');
@@ -94,7 +95,7 @@ class ExploreFeed extends ChangeNotifier {
   List<CatalogCategory> get tabs {
     final catalog = _catalog;
     if (catalog == null) return const [];
-    if (groupedRankings) {
+    if (rankingMode && groupedRankings) {
       return [for (final board in _visibleBoards) rankingTab(board)];
     }
     final [all, ...genres] = catalog.categories;
@@ -115,7 +116,7 @@ class ExploreFeed extends ChangeNotifier {
   }
 
   void selectGenre(String id) {
-    if (!groupedRankings || id == _genre.id) return;
+    if (!rankingMode || !groupedRankings || id == _genre.id) return;
     final selected = genreTabs.where((item) => item.id == id).firstOrNull;
     if (selected == null) return;
     _genre = selected;
@@ -131,7 +132,7 @@ class ExploreFeed extends ChangeNotifier {
 
   WatchEntry? get resume {
     final source = this.source;
-    if (source == null || groupedRankings || tabs.isEmpty || _tab.id != tabs.first.id) return null;
+    if (source == null || rankingMode || tabs.isEmpty || _tab.id != tabs.first.id) return null;
     return store.history
         .where((entry) => entry.drama.source == source.id)
         .firstOrNull;
@@ -184,7 +185,7 @@ class ExploreFeed extends ChangeNotifier {
       await catalog.loadCategories(force: force);
     } catch (_) {}
     if (_disposed || catalog != _catalog) return;
-    if (groupedRankings) {
+    if (rankingMode && groupedRankings) {
       final board = _defaultBoard;
       if (board != null) {
         _select(rankingTab(board));
