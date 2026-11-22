@@ -428,6 +428,7 @@ class ExplorePageState extends State<ExplorePage> {
 
   Widget _grid(
     ExploreFeed explore,
+    CatalogCategory tab,
     DramaFeed feed,
     Widget? hero,
     List<Drama> items,
