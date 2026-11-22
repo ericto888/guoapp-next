@@ -34,10 +34,6 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get --enforce-lockfile
-      - name: Apply Dart formatter and show exact diff
-        run: |
-          dart format --output=write lib/ui/explore/hongguo_find_page.dart
-          git diff -- lib/ui/explore/hongguo_find_page.dart
       - name: Dart format check
         run: dart format --output=none --set-exit-if-changed lib test
       - name: Dart analyze
@@ -51,7 +47,7 @@ jobs:
         working-directory: native
 
   ios:
-    if: false
+    needs: checks
     runs-on: macos-latest
     timeout-minutes: 70
     steps:
