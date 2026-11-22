@@ -579,50 +579,67 @@ class _HongguoFindPageState extends State<HongguoFindPage> {
   ) {
     final colors = Theme.of(context).colorScheme;
     final selected = _selected[row.type] ?? const <String>{};
-    final maxChipWidth = MediaQuery.sizeOf(context).width - 96;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (row.type != 'genre') ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              row.name,
-              softWrap: true,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: colors.onSurfaceVariant,
+    final allItem = items.firstWhere(
+      (item) => item.id.isEmpty,
+      orElse: () => const CategoryFilterItem(id: '', name: '全部'),
+    );
+    final choices = items.where((item) => item.id.isNotEmpty).toList();
+    final label = row.name.trim().isEmpty ? '全部' : '全部${row.name}';
+    Widget chip(CategoryFilterItem item) => row.singleChoice
+        ? ChoiceChip(
+            label: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            selected: selected.contains(item.id) ||
+                (item.id.isEmpty && selected.isEmpty),
+            onSelected: (_) => _selectFilter(row, item),
+            visualDensity: VisualDensity.compact,
+          )
+        : FilterChip(
+            label: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            selected: selected.contains(item.id) ||
+                (item.id.isEmpty && selected.isEmpty),
+            onSelected: (_) => _selectFilter(row, item),
+            visualDensity: VisualDensity.compact,
+          );
+    return SizedBox(
+      height: 42,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 88,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: row.singleChoice
+                  ? ChoiceChip(
+                      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      selected: selected.isEmpty,
+                      onSelected: (_) => _selectFilter(row, allItem),
+                      visualDensity: VisualDensity.compact,
+                    )
+                  : FilterChip(
+                      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      selected: selected.isEmpty,
+                      onSelected: (_) => _selectFilter(row, allItem),
+                      visualDensity: VisualDensity.compact,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final item in choices)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: chip(item),
+                    ),
+                ],
               ),
             ),
           ),
         ],
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: [
-            for (final item in items)
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxChipWidth),
-                child: row.singleChoice
-                    ? ChoiceChip(
-                        label: Text(item.name, softWrap: true),
-                        selected: selected.contains(item.id) ||
-                            (item.id.isEmpty && selected.isEmpty),
-                        onSelected: (_) => _selectFilter(row, item),
-                        visualDensity: VisualDensity.compact,
-                      )
-                    : FilterChip(
-                        label: Text(item.name, softWrap: true),
-                        selected: selected.contains(item.id) ||
-                            (item.id.isEmpty && selected.isEmpty),
-                        onSelected: (_) => _selectFilter(row, item),
-                        visualDensity: VisualDensity.compact,
-                      ),
-              ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 
