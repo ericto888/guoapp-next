@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../core_bridge.dart';
 import '../../local_store.dart';
 import '../../models.dart';
+import '../../playback_preferences.dart';
 import '../../playback_session.dart';
 
 Player _player() => Player(
@@ -22,7 +25,7 @@ class PlaybackHandle {
     double position = 0,
     bool autoplay = true,
     bool preopen = true,
-  }) {
+  }) : _store = store {
     final main = _respawnPlayer();
     final standby = preopen ? _respawnPlayer() : null;
     session = PlaybackSession(
@@ -41,12 +44,25 @@ class PlaybackHandle {
   }
 
   late final PlaybackSession session;
+  final LocalStore _store;
   final _videos = <Player, VideoController>{};
+
+  VideoController _video(Player player) => VideoController(
+    player,
+    configuration: Platform.isAndroid &&
+            _store.playbackPreferences.televisionDecoder ==
+                TelevisionDecoder.hardwareDirect
+        ? const VideoControllerConfiguration(
+            vo: 'mediacodec_embed',
+            hwdec: 'mediacodec',
+          )
+        : const VideoControllerConfiguration(),
+  );
 
   /// iOS 切出/锁屏后回前台恢复失败时，连同渲染上下文一起重建播放器。
   Player _respawnPlayer() {
     final player = _player();
-    _videos[player] = VideoController(player);
+    _videos[player] = _video(player);
     return player;
   }
 
@@ -55,7 +71,7 @@ class PlaybackHandle {
   void _retireVideo(Player player) => _videos.remove(player);
 
   VideoController video(Player player) =>
-      _videos.putIfAbsent(player, () => VideoController(player));
+      _videos.putIfAbsent(player, () => _video(player));
 
   void dispose() {
     session.dispose();

@@ -66,6 +66,7 @@ public class VideoOutput: NSObject {
     disposeTextureId()
   }
 
+
   public func setSize(width: Int64?, height: Int64?) {
     worker.enqueue {
       self.width = width

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../picture_in_picture.dart';
 import '../../playback_session.dart';
 import '../widgets/contained_slider.dart';
 import '../widgets/focus_ring.dart';
@@ -15,8 +14,7 @@ import 'player_video.dart';
 
 bool playerVisible(AppLifecycleState? state) =>
     state == AppLifecycleState.resumed ||
-    state == AppLifecycleState.inactive ||
-    PictureInPicture.instance.active;
+    state == AppLifecycleState.inactive;
 
 Widget _video(PlaybackHandle handle) => PlayerVideo(
   key: ValueKey(handle.session.player),
@@ -32,29 +30,6 @@ const _spinner = IgnorePointer(
     ),
   ),
 );
-
-class PictureInPictureView extends StatelessWidget {
-  const PictureInPictureView({super.key, required this.handle});
-  final PlaybackHandle handle;
-
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: handle.session,
-    builder: (context, _) {
-      final session = handle.session;
-      return ColoredBox(
-        color: Colors.black,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _video(handle),
-            if (session.loading || session.ready && session.stalled) _spinner,
-          ],
-        ),
-      );
-    },
-  );
-}
 
 class MiniWindowView extends StatefulWidget {
   const MiniWindowView({

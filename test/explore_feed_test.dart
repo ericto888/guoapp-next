@@ -81,11 +81,30 @@ void main() {
     explore.select('short_play');
     await pumpEventQueue();
     await explore.refresh();
-    expect(repository.catalogRequests, [
-      'hongguo|short_play||1',
-      'hongguo|short_play||1!',
-    ]);
+    expect(
+      repository.catalogRequests.where((request) => request.endsWith('!')),
+      ['hongguo|short_play||1!'],
+    );
   });
+
+  test(
+    'neighbors of a loaded tab are fetched ahead on their own lane',
+    () async {
+      final repository = FakeRepository();
+      final explore = await _open(repository);
+      expect(repository.catalogRequests, ['hongguo|||1']);
+
+      explore.select('');
+      expect(explore.feed!.loading, isFalse);
+      expect(_titles(explore), ['分类']);
+      await pumpEventQueue();
+      expect(repository.catalogRequests, [
+        'hongguo|||1',
+        'hongguo|short_play||1',
+      ]);
+      expect(repository.catalogLanes, ['ahead', 'ahead']);
+    },
+  );
 
   test('ranking boards of this source follow all, with their ranks', () async {
     final repository = FakeRepository()

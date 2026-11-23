@@ -4,6 +4,7 @@ import 'dart:ui' show AppLifecycleState, Size;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'app_device.dart';
 import 'core_bridge.dart';
@@ -17,6 +18,22 @@ import 'playback_preferences.dart';
 import 'playback_preloader.dart';
 import 'playback_recovery.dart';
 
+const _swapChromaSource = '''
+//!HOOK NATIVE
+//!BIND HOOKED
+//!DESC swap chroma
+vec4 hook() {
+    return HOOKED_tex(HOOKED_pos).xzyw;
+}
+''';
+
+Future<String> _swapChromaShader() async {
+  final directory = await getApplicationSupportDirectory();
+  final file = File('${directory.path}/swap_chroma.glsl');
+  await file.writeAsString(_swapChromaSource);
+  return file.path;
+}
+
 Size? videoDisplaySize(VideoParams parameters) {
   final width = (parameters.dw ?? 0) > 0 ? parameters.dw! : parameters.w ?? 0;
   final height = (parameters.dh ?? 0) > 0 ? parameters.dh! : parameters.h ?? 0;
@@ -25,6 +42,15 @@ Size? videoDisplaySize(VideoParams parameters) {
   return rotation == 90
       ? Size(height.toDouble(), width.toDouble())
       : Size(width.toDouble(), height.toDouble());
+}
+
+bool audioOnly(Tracks tracks) {
+  bool real(String id) => id != 'auto' && id != 'no';
+  return tracks.audio.any((track) => real(track.id)) &&
+      !tracks.video.any(
+        (track) =>
+            real(track.id) && track.albumart != true && track.image != true,
+      );
 }
 
 String _diagnostic(Object error) {
@@ -109,6 +135,7 @@ class PlaybackSession extends ChangeNotifier {
       _videoSize = size;
       _syncVideoFitForSize(size);
     }
+    if (audioOnly(player.state.tracks)) _audioDetected = true;
     _buffering(player.state.buffering);
     final stream = player.stream;
     _subscriptions.addAll([
@@ -136,6 +163,11 @@ class PlaybackSession extends ChangeNotifier {
       }),
       for (final changes in [stream.duration, stream.buffer, stream.rate])
         changes.listen((_) => _sync()),
+      stream.tracks.listen((tracks) {
+        if (_audioDetected || !audioOnly(tracks)) return;
+        _audioDetected = true;
+        _notify();
+      }),
       stream.videoParams.listen((parameters) {
         final size = videoDisplaySize(parameters);
         if (size == null || _closed) return;
@@ -245,7 +277,6 @@ class PlaybackSession extends ChangeNotifier {
   bool _playIntent = true;
   bool _resumeIntent = true;
   bool _lifecycleDormant = false;
-  bool _pipActive = false;
   AppLifecycleState? _lastLifecycle;
   int _restoreToken = 0;
   bool _pendingError = false;
@@ -254,6 +285,7 @@ class PlaybackSession extends ChangeNotifier {
   bool _locked = false;
   bool _engaged;
   bool _staleAudio = false;
+  bool _audioDetected = false;
   bool _stalled = false;
   String _loadingMessage = '正在准备播放';
   String? _error;
@@ -314,6 +346,7 @@ class PlaybackSession extends ChangeNotifier {
     null => 9 / 16,
   };
   bool get aspectKnown => _videoSize != null;
+  bool get audio => episode.audio || _audioDetected;
   VideoFit get videoFit => _videoFit;
   bool get wideVideoSource =>
       _videoSize != null && _videoSize!.width >= _videoSize!.height;
@@ -771,6 +804,8 @@ class PlaybackSession extends ChangeNotifier {
     if (platform is! NativePlayer) return;
     final hwdec = switch (store.playbackPreferences.televisionDecoder) {
       TelevisionDecoder.software => 'no',
+      TelevisionDecoder.hardwareDirect when Platform.isAndroid => 'mediacodec',
+      TelevisionDecoder.hardwareSwapUv when Platform.isAndroid => 'mediacodec-copy',
       TelevisionDecoder.hardware when Platform.isAndroid => 'mediacodec-copy',
       TelevisionDecoder.hardware when Platform.isIOS || Platform.isMacOS =>
         'videotoolbox-copy',
@@ -787,6 +822,13 @@ class PlaybackSession extends ChangeNotifier {
       await platform.setProperty('vd-lavc-fast', 'yes');
       await platform.setProperty('video-sync', 'audio');
       await platform.setProperty('framedrop', 'vo');
+      await platform.setProperty(
+        'glsl-shaders',
+        store.playbackPreferences.televisionDecoder ==
+                TelevisionDecoder.hardwareSwapUv
+            ? await _swapChromaShader()
+            : '',
+      );
     }
     await platform.setProperty(
       'demuxer-lavf-o',
@@ -1225,6 +1267,8 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> retry() =>
       play(_index, position: currentPosition, playWhenReady: true);
 
+  Future<void> retryFromStart() => play(_index);
+
   Future<void> switchOnline() {
     _online = true;
     return retry();
@@ -1662,29 +1706,6 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  void setPictureInPicture(bool active) {
-    if (_closed || _pipActive == active) return;
-    _pipActive = active;
-    DiaryService.add('[Play] 画中画 ${active ? '开启' : '关闭'}');
-    if (active) {
-      if (!_foreground) {
-        _foreground = true;
-        _playIntent = _resumeIntent;
-        _health.reset();
-        _sync();
-        if (_resumeIntent && ready) {
-          unawaited(_restoreAfterLifecycle(++_restoreToken));
-        }
-      }
-      _notify();
-      return;
-    }
-    final state = _lastLifecycle;
-    if (state != null && state != AppLifecycleState.resumed) {
-      _onBackground(state, 'pip_exit');
-    }
-  }
-
   void _snapshotForBackground() {
     final position = player.state.position;
     if (_openedIndex == _index && position > Duration.zero) {
@@ -1723,10 +1744,6 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   void _onBackground(AppLifecycleState state, String source) {
-    if (_pipActive) {
-      DiaryService.add('[Play] 生命周期 ${state.name} 但画中画活跃，保持播放');
-      return;
-    }
     if (!_foreground) return;
     _snapshotForBackground();
     _invalidateStandbyForBackground();

@@ -320,7 +320,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   (double, double) get _zoomRange {
     final video = _session.videoSize;
-    if (video == null || MediaQuery.sizeOf(context).isEmpty) return (1, 1);
+    if (video == null || _session.audio || MediaQuery.sizeOf(context).isEmpty) {
+      return (1, 1);
+    }
     final width = _fitWidth(_session.videoFit, video);
     return (
       _fitWidth(VideoFit.auto, video) / width,
@@ -445,7 +447,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   Future<void> _openEpisodes() => showPlayerSheet(
     context,
-    (_) => _EpisodeSheet(
+    (_) => EpisodeSheet(
       session: _session,
       onSeasons: () => unawaited(_openSeasons()),
       canDownload:
@@ -1074,7 +1076,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               children: [
                 Expanded(
                   child: Text(
-                    '第 ${session.episode.number} 集  |  ${description.isEmpty ? '暂无简介' : description}',
+                    '${session.episode.label}  |  ${description.isEmpty ? '暂无简介' : description}',
                     maxLines: _descExpanded ? null : 2,
                     overflow: _descExpanded ? null : TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1136,7 +1138,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 ),
               ),
               Text(
-                '第 ${session.episode.number} 集',
+                '${session.episode.label}',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: .78),
                   fontSize: 12,
@@ -1409,8 +1411,8 @@ class _Shade extends StatelessWidget {
   );
 }
 
-class _EpisodeSheet extends StatefulWidget {
-  const _EpisodeSheet({
+class EpisodeSheet extends StatefulWidget {
+  const EpisodeSheet({
     required this.session,
     required this.onSeasons,
     required this.canDownload,
@@ -1422,10 +1424,10 @@ class _EpisodeSheet extends StatefulWidget {
   final ValueChanged<List<int>> onDownload;
 
   @override
-  State<_EpisodeSheet> createState() => _EpisodeSheetState();
+  State<EpisodeSheet> createState() => EpisodeSheetState();
 }
 
-class _EpisodeSheetState extends State<_EpisodeSheet> {
+class EpisodeSheetState extends State<EpisodeSheet> {
   final _selected = <int>{};
   bool _selecting = false;
 

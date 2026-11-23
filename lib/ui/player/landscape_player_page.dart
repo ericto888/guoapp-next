@@ -979,7 +979,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                       ),
                     ),
                     Text(
-                      '第 ${session.episode.number} 集',
+                      '${session.episode.label}',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: .78),
                         fontSize: 12,
@@ -1015,7 +1015,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
               const SizedBox(width: 4),
               if (session.danmakuSupported) _danmakuButton(context),
               if (widget.onMiniWindow case final onMiniWindow?)
-                _icon(Icons.picture_in_picture_alt_rounded, '小窗', onMiniWindow),
+                _icon(Icons.open_in_new_rounded, '小窗', onMiniWindow),
               _icon(
                 Icons.settings_rounded,
                 '播放设置',
@@ -1684,7 +1684,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                 tooltip: '返回',
               ),
               Text(
-                '第 ${session.episode.number} 集',
+                '${session.episode.label}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -2003,7 +2003,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                           TextSpan(
                             children: [
                               TextSpan(
-                                text: '第 ${session.episode.number} 集',
+                                text: '${session.episode.label}',
                                 style: TextStyle(
                                   color: colors.onSurfaceVariant,
                                 ),

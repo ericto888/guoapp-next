@@ -13,7 +13,7 @@ const danmakuColors = [
   0xFF8CF08C,
 ];
 
-enum TelevisionDecoder { optimized, hardware, software }
+enum TelevisionDecoder { optimized, hardware, software, hardwareSwapUv, hardwareDirect }
 
 enum DanmakuCoverage {
   quarter(.25, '顶部四分之一'),
@@ -104,7 +104,7 @@ class PlaybackPreferences {
     this.autoHideControls = true,
     this.hideSystemBars = true,
     this.portraitStyleForWide = false,
-    this.autoPictureInPicture = false,
+    this.directPlay = false,
     this.videoFit = VideoFit.auto,
     VideoFit? portraitVideoFit,
     VideoFit? landscapeVideoFit,
@@ -140,7 +140,7 @@ class PlaybackPreferences {
   final bool autoHideControls;
   final bool hideSystemBars;
   final bool portraitStyleForWide;
-  final bool autoPictureInPicture;
+  final bool directPlay;
   /// Legacy shared value retained for older settings payloads.
   final VideoFit videoFit;
   final VideoFit portraitVideoFit;
@@ -178,7 +178,7 @@ class PlaybackPreferences {
     bool? autoHideControls,
     bool? hideSystemBars,
     bool? portraitStyleForWide,
-    bool? autoPictureInPicture,
+    bool? directPlay,
     VideoFit? videoFit,
     VideoFit? portraitVideoFit,
     VideoFit? landscapeVideoFit,
@@ -209,7 +209,7 @@ class PlaybackPreferences {
     autoHideControls: autoHideControls ?? this.autoHideControls,
     hideSystemBars: hideSystemBars ?? this.hideSystemBars,
     portraitStyleForWide: portraitStyleForWide ?? this.portraitStyleForWide,
-    autoPictureInPicture: autoPictureInPicture ?? this.autoPictureInPicture,
+    directPlay: directPlay ?? this.directPlay,
     videoFit: videoFit ?? this.videoFit,
     portraitVideoFit: portraitVideoFit ?? this.portraitVideoFit,
     landscapeVideoFit: landscapeVideoFit ?? this.landscapeVideoFit,
@@ -242,7 +242,7 @@ class PlaybackPreferences {
     'autoHideControls': autoHideControls,
     'hideSystemBars': hideSystemBars,
     'portraitStyleForWide': portraitStyleForWide,
-    'autoPictureInPicture': autoPictureInPicture,
+    'directPlay': directPlay,
     'videoFit': videoFit.name,
     'portraitVideoFit': portraitVideoFit.name,
     'landscapeVideoFit': landscapeVideoFit.name,
@@ -305,7 +305,7 @@ class PlaybackPreferences {
       autoHideControls: value['autoHideControls'] as bool? ?? true,
       hideSystemBars: value['hideSystemBars'] as bool? ?? true,
       portraitStyleForWide: value['portraitStyleForWide'] as bool? ?? false,
-      autoPictureInPicture: value['autoPictureInPicture'] as bool? ?? false,
+      directPlay: value['directPlay'] as bool? ?? false,
       videoFit: VideoFit.values.asNameMap()[value['videoFit']] ?? VideoFit.auto,
       portraitVideoFit:
           VideoFit.values.asNameMap()[value['portraitVideoFit']] ??

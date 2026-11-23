@@ -1,4 +1,5 @@
 import argparse
+import base64
 import os
 import platform
 import re
@@ -41,11 +42,20 @@ def validate_package(package, prefix):
             raise SystemExit('iOS 压缩包损坏：' + corrupt)
 
 
-def write_app_config():
+def write_app_config(unsigned=False):
     display = app.display_name
     config = root / 'ios' / 'Flutter' / 'AppVariant.xcconfig'
-    config.write_text(f'PRODUCT_BUNDLE_IDENTIFIER = {app.bundle_identifier}\n'
-                      f'APP_DISPLAY_NAME = {display}\n', encoding='utf-8')
+    values = [
+        f'PRODUCT_BUNDLE_IDENTIFIER = {app.bundle_identifier}',
+        f'APP_DISPLAY_NAME = {display}',
+    ]
+    if unsigned:
+        values.extend([
+            'CODE_SIGNING_ALLOWED = NO',
+            'CODE_SIGNING_REQUIRED = NO',
+            'CODE_SIGN_IDENTITY =',
+        ])
+    config.write_text('\n'.join(values) + '\n', encoding='utf-8')
 
 
 def build_core(simulator=False, bundles=()):
@@ -105,7 +115,7 @@ def main():
     parser.add_argument('--export-options', type=Path, help='使用自己的 Xcode 签名配置导出 IPA')
     parser.add_argument('--bundle', action='append', default=[], help='内置模块目录，可多次指定；也可用逗号分隔写在环境变量 BUNDLED_MODULES 里')
     options = parser.parse_args()
-    write_app_config()
+    write_app_config(unsigned=options.export_options is None)
     build_core(options.simulator, options.bundle)
     if options.core_only:
         return
@@ -128,8 +138,40 @@ def main():
             shutil.copy2(package, destination)
             artifacts.append(destination)
     else:
-        run([flutter, 'build', 'ios', '--release', '--no-codesign', '--no-pub', *app.flutter_arguments])
-        application = root / 'build' / 'ios' / 'iphoneos' / 'Runner.app'
+        # Flutter 3.47+ 在某些 Xcode 版本上会在 --no-codesign 后仍执行
+        # Development Team 部署检查。直接调用同一 Runner workspace，并在
+        # xcodebuild 层明确关闭签名，仍由 Flutter 的 Xcode build phases 编译 Dart。
+        derived = root / 'build' / 'ios' / 'DerivedData'
+        if derived.exists():
+            shutil.rmtree(derived)
+        arguments = [
+            'xcodebuild',
+            '-workspace', str(root / 'ios' / 'Runner.xcworkspace'),
+            '-scheme', 'Runner',
+            '-configuration', 'Release',
+            '-sdk', 'iphoneos',
+            '-destination', 'generic/platform=iOS',
+            '-derivedDataPath', str(derived),
+            'CODE_SIGNING_ALLOWED=NO',
+            'CODE_SIGNING_REQUIRED=NO',
+            'CODE_SIGN_IDENTITY=',
+            'DEVELOPMENT_TEAM=',
+        ]
+        defines = [
+            argument.removeprefix('--dart-define=')
+            for argument in app.flutter_arguments
+            if argument.startswith('--dart-define=')
+        ]
+        if defines:
+            encoded = ','.join(
+                base64.b64encode(value.encode('utf-8')).decode('ascii')
+                for value in defines
+            )
+            arguments.append('DART_DEFINES=' + encoded)
+        run(arguments)
+        application = (
+            derived / 'Build' / 'Products' / 'Release-iphoneos' / 'Runner.app'
+        )
         validate_unsigned_application(application)
         symbols = subprocess.check_output(['xcrun', 'nm', '-gU', str(application / 'Runner')], text=True)
         for symbol in ['_DuanjuRequest', '_DuanjuFree']:

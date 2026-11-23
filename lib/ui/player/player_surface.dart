@@ -746,7 +746,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
     final showWide = !widget.touch && !widget.fullscreen && fits(_iconSlot);
     final showDanmaku = _session.danmakuSupported && fits(_iconSlot + 4);
     final showVolume = !widget.touch && fits(_iconSlot);
-    final showFit = fits(_iconSlot);
+    final showFit = !_session.audio && fits(_iconSlot);
     final showMiniWindow = widget.onMiniWindow != null && fits(_iconSlot);
     final showSleep = fits(_iconSlot);
     final showCast = castSupported && fits(_iconSlot);
@@ -835,8 +835,8 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
           ),
         if (showMiniWindow)
           _icon(
-            Icons.picture_in_picture_alt_rounded,
-            '画中画',
+            Icons.open_in_new_rounded,
+            '小窗',
             widget.onMiniWindow,
           ),
         if (showCast)
@@ -1226,7 +1226,9 @@ class PlaybackFailure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final primary = Theme.of(context).colorScheme.primary;
+    final accent = primary == Colors.black ? Colors.white : primary;
+    final actionStyle = TextButton.styleFrom(foregroundColor: accent);
     return ColoredBox(
       color: Colors.black.withValues(alpha: .9),
       child: Center(
@@ -1238,7 +1240,7 @@ class PlaybackFailure extends StatelessWidget {
               Icon(
                 Icons.play_disabled_rounded,
                 size: 48,
-                color: colors.primary,
+                color: accent,
               ),
               const SizedBox(height: 16),
               const Text(
@@ -1284,8 +1286,15 @@ class PlaybackFailure extends StatelessWidget {
                       onPressed: session.retry,
                       child: Text(session.localFailure ? '重试本地播放' : '重试'),
                     ),
+                  if (!session.loginRequired && session.currentPosition > 0)
+                    TextButton(
+                      style: actionStyle,
+                      onPressed: session.retryFromStart,
+                      child: const Text('从头播放'),
+                    ),
                   if (session.localFailure)
                     TextButton(
+                      style: actionStyle,
                       onPressed: session.switchOnline,
                       child: const Text('改为在线播放'),
                     ),

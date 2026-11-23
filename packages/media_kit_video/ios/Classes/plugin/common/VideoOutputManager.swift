@@ -27,6 +27,7 @@ public class VideoOutputManager: NSObject {
     self.videoOutputs[handle] = videoOutput
   }
 
+
   public func setSize(
     handle: Int64,
     width: Int64?,
