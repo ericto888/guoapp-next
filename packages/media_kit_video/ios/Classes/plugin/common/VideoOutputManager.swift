@@ -1,5 +1,3 @@
-import CoreVideo
-
 #if canImport(Flutter)
   import Flutter
 #elseif canImport(FlutterMacOS)
@@ -8,7 +6,6 @@ import CoreVideo
 
 public class VideoOutputManager: NSObject {
   private let registry: FlutterTextureRegistry
-  var onFrame: ((Int64, ResizableTextureProtocol) -> Void)?
   private var videoOutputs = [Int64: VideoOutput]()
 
   init(registry: FlutterTextureRegistry) {
@@ -24,19 +21,12 @@ public class VideoOutputManager: NSObject {
       handle: handle,
       configuration: configuration,
       registry: self.registry,
-      textureUpdateCallback: textureUpdateCallback,
-      onFrame: { [weak self] texture in self?.onFrame?(handle, texture) },
-      // PiP consumes the texture's pixel buffer independently. Do not force
-      // the main video decoder/output onto the CPU software-rendering path.
-      useSoftwareRendering: false
+      textureUpdateCallback: textureUpdateCallback
     )
 
     self.videoOutputs[handle] = videoOutput
   }
 
-  func currentFrame(handle: Int64) -> CVPixelBuffer? {
-    videoOutputs[handle]?.currentFrame()
-  }
 
   public func setSize(
     handle: Int64,
