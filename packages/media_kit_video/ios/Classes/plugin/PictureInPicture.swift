@@ -29,7 +29,7 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate,
     layer.videoGravity = .resizeAspect
     controller.delegate = self
     controller.requiresLinearPlayback = true
-    possibleObservation = controller.observe(\\.isPictureInPicturePossible, options: [.new]) {
+    possibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new]) {
       [weak self] _, _ in
       DispatchQueue.main.async { self?.publishAvailability() }
     }
