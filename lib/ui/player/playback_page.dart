@@ -99,6 +99,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
   void dispose() {
     _session.removeListener(_changed);
     _miniWindow.removeListener(_miniWindowChanged);
+    if (_miniWindow.window) unawaited(_restore());
     _pageScope.dispose();
     if (_wideAutoRotationApplied) {
       _wideAutoRotationApplied = false;
@@ -114,6 +115,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
   void _changed() {
     final previous = _bound;
     _bind();
+    if (_miniWindow.window) _miniWindow.resize(_session.aspectRatio);
     final wide = _measure();
     final audio = _session.audio;
     final swapped = !identical(previous, _bound);
