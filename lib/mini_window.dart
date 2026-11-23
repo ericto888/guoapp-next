@@ -17,13 +17,6 @@ double _clampRatio(double aspectRatio) =>
     ? aspectRatio.clamp(1 / 2.39, 2.39)
     : 16 / 9;
 
-Map<String, int> _ratio(double aspectRatio) {
-  final ratio = _clampRatio(aspectRatio);
-  return ratio >= 1
-      ? {'width': (1000 * ratio).round(), 'height': 1000}
-      : {'width': 1000, 'height': (1000 / ratio).round()};
-}
-
 Size _miniSize(double ratio, double extent) =>
     ratio >= 1 ? Size(extent, extent / ratio) : Size(extent * ratio, extent);
 
