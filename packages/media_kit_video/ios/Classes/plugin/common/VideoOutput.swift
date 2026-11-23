@@ -1,5 +1,3 @@
-import CoreVideo
-
 #if canImport(Flutter)
   import Flutter
 #elseif canImport(FlutterMacOS)
@@ -30,7 +28,6 @@ public class VideoOutput: NSObject {
   private let enableHardwareAcceleration: Bool
   private let registry: FlutterTextureRegistry
   private let textureUpdateCallback: TextureUpdateCallback
-  private let onFrame: (ResizableTextureProtocol) -> Void
   private let worker: Worker = .init()
   private var width: Int64?
   private var height: Int64?
@@ -43,9 +40,7 @@ public class VideoOutput: NSObject {
     handle: Int64,
     configuration: VideoOutputConfiguration,
     registry: FlutterTextureRegistry,
-    textureUpdateCallback: @escaping TextureUpdateCallback,
-    onFrame: @escaping (ResizableTextureProtocol) -> Void,
-    useSoftwareRendering: Bool
+    textureUpdateCallback: @escaping TextureUpdateCallback
   ) {
     let handle = OpaquePointer(bitPattern: Int(handle))
     assert(handle != nil, "handle casting")
@@ -56,7 +51,6 @@ public class VideoOutput: NSObject {
     enableHardwareAcceleration = configuration.enableHardwareAcceleration && !useSoftwareRendering
     self.registry = registry
     self.textureUpdateCallback = textureUpdateCallback
-    self.onFrame = onFrame
 
     super.init()
 
@@ -72,10 +66,6 @@ public class VideoOutput: NSObject {
     disposeTextureId()
   }
 
-  func currentFrame() -> CVPixelBuffer? {
-    guard textureId >= 0 else { return nil }
-    return texture.copyPixelBuffer()?.takeRetainedValue()
-  }
 
   public func setSize(width: Int64?, height: Int64?) {
     worker.enqueue {
@@ -184,7 +174,6 @@ public class VideoOutput: NSObject {
     DispatchQueue.main.sync { [weak self] in
       guard let that = self else { return }
       // Textures must be marked as available from the main thread
-      that.onFrame(that.texture)
       that.registry.textureFrameAvailable(that.textureId)
     }
   }
