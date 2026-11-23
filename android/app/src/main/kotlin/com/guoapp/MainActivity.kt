@@ -342,8 +342,6 @@ class MainActivity : FlutterActivity() {
                                 "pac" to (proxy != null && proxy.pacFileUrl != Uri.EMPTY)
                             ))
                         }
-                            result.success(null)
-                        }
                         "getBrightness" -> {
                             val lp = window.attributes
                             val current = if (lp.screenBrightness >= 0f) {
