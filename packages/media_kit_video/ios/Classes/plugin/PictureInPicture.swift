@@ -17,6 +17,8 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate,
   private var playing = false
   private var starting = false
   private var hasFrame = false
+  private var lastEnqueuedAt: TimeInterval = 0
+  private let minimumFrameInterval: TimeInterval = 1.0 / 15.0
   private var possibleObservation: NSKeyValueObservation?
 
   var possible: Bool { selectedHandle != nil && hasFrame && controller.isPictureInPicturePossible }
@@ -27,7 +29,7 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate,
     layer.videoGravity = .resizeAspect
     controller.delegate = self
     controller.requiresLinearPlayback = true
-    possibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new]) {
+    possibleObservation = controller.observe(\\.isPictureInPicturePossible, options: [.new]) {
       [weak self] _, _ in
       DispatchQueue.main.async { self?.publishAvailability() }
     }
@@ -42,6 +44,9 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate,
       }
       self.selectedHandle = handle
       hasFrame = false
+      lastEnqueuedAt = 0
+      pool = nil
+      dimensions = .zero
       layer.flushAndRemoveImage()
       controller.invalidatePlaybackState()
       publishAvailability()
@@ -97,6 +102,13 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate,
 
   func enqueue(_ source: CVPixelBuffer, handle: Int64, refresh: Bool = false) {
     guard self.selectedHandle == handle, refresh || needsFrame(handle: handle) else { return }
+    // PiP does not need to mirror every decoded frame. Throttle the extra
+    // sample-buffer copy to 15 fps while keeping an immediate initial frame.
+    let now = ProcessInfo.processInfo.systemUptime
+    if !refresh, (starting || controller.isPictureInPictureActive),
+       now - lastEnqueuedAt < minimumFrameInterval {
+      return
+    }
     if layer.superlayer == nil { attachLayer() }
     if layer.status == .failed { layer.flush() }
     guard layer.isReadyForMoreMediaData, let buffer = copyFrame(source) else { return }
@@ -124,6 +136,7 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate,
       )
     }
     layer.enqueue(sample)
+    lastEnqueuedAt = now
     if !hasFrame {
       hasFrame = true
       controller.invalidatePlaybackState()
@@ -150,7 +163,7 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate,
       CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attributes as CFDictionary, &pool)
     }
     guard let pool else { return nil }
-    let limits = [kCVPixelBufferPoolAllocationThresholdKey as String: 8] as CFDictionary
+    let limits = [kCVPixelBufferPoolAllocationThresholdKey as String: 3] as CFDictionary
     var destination: CVPixelBuffer?
     guard CVPixelBufferPoolCreatePixelBufferWithAuxAttributes(
       kCFAllocatorDefault, pool, limits, &destination
@@ -197,6 +210,7 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate,
 
   private func finish() {
     starting = false
+    lastEnqueuedAt = 0
     if selectedHandle == nil { layer.removeFromSuperlayer() }
     channel.invokeMethod("pictureInPictureChanged", arguments: ["active": false])
   }
