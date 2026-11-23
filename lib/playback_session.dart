@@ -277,7 +277,6 @@ class PlaybackSession extends ChangeNotifier {
   bool _playIntent = true;
   bool _resumeIntent = true;
   bool _lifecycleDormant = false;
-  bool _pipActive = false;
   AppLifecycleState? _lastLifecycle;
   int _restoreToken = 0;
   bool _pendingError = false;
@@ -1707,29 +1706,6 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  void setPictureInPicture(bool active) {
-    if (_closed || _pipActive == active) return;
-    _pipActive = active;
-    DiaryService.add('[Play] 画中画 ${active ? '开启' : '关闭'}');
-    if (active) {
-      if (!_foreground) {
-        _foreground = true;
-        _playIntent = _resumeIntent;
-        _health.reset();
-        _sync();
-        if (_resumeIntent && ready) {
-          unawaited(_restoreAfterLifecycle(++_restoreToken));
-        }
-      }
-      _notify();
-      return;
-    }
-    final state = _lastLifecycle;
-    if (state != null && state != AppLifecycleState.resumed) {
-      _onBackground(state, 'pip_exit');
-    }
-  }
-
   void _snapshotForBackground() {
     final position = player.state.position;
     if (_openedIndex == _index && position > Duration.zero) {
@@ -1768,10 +1744,6 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   void _onBackground(AppLifecycleState state, String source) {
-    if (_pipActive) {
-      DiaryService.add('[Play] 生命周期 ${state.name} 但画中画活跃，保持播放');
-      return;
-    }
     if (!_foreground) return;
     _snapshotForBackground();
     _invalidateStandbyForBackground();
