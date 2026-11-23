@@ -26,7 +26,9 @@ public class VideoOutputManager: NSObject {
       registry: self.registry,
       textureUpdateCallback: textureUpdateCallback,
       onFrame: { [weak self] texture in self?.onFrame?(handle, texture) },
-      useSoftwareRendering: onFrame != nil
+      // PiP consumes the texture's pixel buffer independently. Do not force
+      // the main video decoder/output onto the CPU software-rendering path.
+      useSoftwareRendering: false
     )
 
     self.videoOutputs[handle] = videoOutput
