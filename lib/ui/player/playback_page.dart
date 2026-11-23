@@ -7,7 +7,7 @@ import 'package:media_kit/media_kit.dart';
 
 import '../../app_device.dart';
 import '../../local_store.dart';
-import '../../picture_in_picture.dart';
+import '../../mini_window.dart';
 import '../../playback_session.dart';
 import '../app_scope.dart';
 import 'audio_player_page.dart';
@@ -42,19 +42,17 @@ bool playbackLayoutIsWide({
   required bool currentWide,
 }) => aspectKnown ? aspectRatio >= 1 : currentWide;
 
-class _PlaybackPageState extends State<PlaybackPage> with WidgetsBindingObserver {
+class _PlaybackPageState extends State<PlaybackPage> {
   final _padFullscreen = ValueNotifier(false);
   bool _windowFullscreen = false;
   final _pageScope = FocusScopeNode(debugLabel: 'playbackPage');
-  final _pip = PictureInPicture.instance;
+  final _miniWindow = MiniWindowController.instance;
   bool _wideVideo = false;
   late bool _audio = _session.audio;
   MediaQueryData? _media;
-  bool _shown = false;
   bool _locked = false;
   Orientation? _lastOrientation;
   Player? _bound;
-  StreamSubscription<bool>? _playing;
 
   PlaybackSession get _session => widget.handle.session;
 
@@ -91,28 +89,18 @@ class _PlaybackPageState extends State<PlaybackPage> with WidgetsBindingObserver
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _wideVideo = _session.aspectKnown && _session.aspectRatio >= 1;
     _session.addListener(_changed);
     _padFullscreen.addListener(_padFullscreenChanged);
-    _pip.addListener(_pipChanged);
-    _pip.onAction = _action;
     _bind();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sync();
       _syncWideAutoRotation();
     });
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _session.removeListener(_changed);
-    _pip.removeListener(_pipChanged);
-    if (_pip.onAction == _action) _pip.onAction = null;
-    _pip.clear();
-    if (_pip.window) unawaited(_restore());
-    unawaited(_playing?.cancel());
     _pageScope.dispose();
     if (_wideAutoRotationApplied) {
       _wideAutoRotationApplied = false;
@@ -125,23 +113,9 @@ class _PlaybackPageState extends State<PlaybackPage> with WidgetsBindingObserver
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Settings may be changed while this playback route remains mounted.
-    // Refresh the native PiP auto-entry flag before iOS backgrounds the app,
-    // otherwise AVKit can retain the previous enabled value.
-    if (Platform.isIOS &&
-        (state == AppLifecycleState.inactive ||
-            state == AppLifecycleState.paused ||
-            state == AppLifecycleState.resumed)) {
-      _sync();
-    }
-  }
-
   void _changed() {
     final previous = _bound;
     _bind();
-    _sync();
     final wide = _measure();
     final audio = _session.audio;
     final swapped = !identical(previous, _bound);
@@ -174,7 +148,7 @@ class _PlaybackPageState extends State<PlaybackPage> with WidgetsBindingObserver
     if (identical(player, _bound)) return;
     _bound = player;
     unawaited(_playing?.cancel());
-    _playing = player.stream.playing.listen((_) => _sync());
+
   }
 
   @override
@@ -212,67 +186,20 @@ class _PlaybackPageState extends State<PlaybackPage> with WidgetsBindingObserver
     }
   }
 
-  void _sync() {
-    if (!mounted) return;
-    final session = _session;
-    final playing = session.player.state.playing;
-    final iosVideo = Platform.isIOS &&
-        (session.ready && session.aspectKnown || _pip.active);
-    _pip.update(
-      aspectRatio: session.aspectRatio,
-      playing: playing,
-      hasPrevious: session.hasPrevious,
-      hasNext: session.hasNext,
-      iosPlayer: iosVideo ? session.player : null,
-      autoEnter:
-          playing &&
-          !_television &&
-          !_audio &&
-          widget.store.playbackPreferences.autoPictureInPicture,
-    );
-    _pip.resize(session.aspectRatio);
-  }
-
-  void _pipChanged() {
-    if (!mounted) return;
-    final shown = _pip.shown;
-    if (shown && !_shown) _closeRoutesAbove();
-    if (!shown && _shown) _pageScope.requestFocus();
-    _shown = shown;
-    if (!_television) _session.setPictureInPicture(shown);
-    _sync();
-    setState(() {});
-  }
-
   void _closeRoutesAbove() {
     final route = ModalRoute.of(context);
     if (route == null || route.isCurrent) return;
     Navigator.of(context).popUntil((other) => other == route);
   }
 
-  void _action(String action) {
-    switch (action) {
-      case 'play':
-        if (!_session.player.state.playing) _session.togglePlayback();
-      case 'pause':
-        if (_session.player.state.playing) _session.togglePlayback();
-      case 'toggle':
-        _session.togglePlayback();
-      case 'previous':
-        unawaited(_session.previous());
-      case 'next':
-        unawaited(_session.next());
-    }
-  }
-
   Future<void> _enterMini() async {
     _closeRoutesAbove();
     _session.setLocked(false);
-    await _pip.enter(_session.aspectRatio, frame: widget.store.miniWindow);
+    await _miniWindow.enter(_session.aspectRatio, frame: widget.store.miniWindow);
   }
 
   Future<void> _restore() async {
-    final frame = await _pip.exit();
+    final frame = await _miniWindow.exit();
     if (frame != null) {
       unawaited(widget.store.setMiniWindow(frame).catchError((Object _) {}));
     }
@@ -326,7 +253,7 @@ class _PlaybackPageState extends State<PlaybackPage> with WidgetsBindingObserver
   @override
   Widget build(BuildContext context) {
     final live = MediaQuery.of(context);
-    final shown = _pip.shown || _pip.leaving && live.size != _media?.size;
+    final shown = _miniWindow.shown;
     if (!shown || _media == null) _media = live;
     return Stack(
       fit: StackFit.expand,
@@ -344,20 +271,18 @@ class _PlaybackPageState extends State<PlaybackPage> with WidgetsBindingObserver
           ),
         ),
         if (shown)
-          _pip.window
-              ? MiniWindowView(
-                  handle: widget.handle,
-                  onRestore: () => unawaited(_restore()),
-                  onClose: () => unawaited(_close()),
-                )
-              : PictureInPictureView(handle: widget.handle),
+          MiniWindowView(
+            handle: widget.handle,
+            onRestore: () => unawaited(_restore()),
+            onClose: () => unawaited(_close()),
+          ),
       ],
     );
   }
 
   Widget _page(BuildContext context) {
     final form = AppScope.formFactorOf(context);
-    final mini = _pip.available ? () => unawaited(_enterMini()) : null;
+    final mini = _miniWindow.available ? () => unawaited(_enterMini()) : null;
     if (_audio && form != FormFactor.television) {
       return AudioPlayerPage(
         store: widget.store,
