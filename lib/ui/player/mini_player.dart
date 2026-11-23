@@ -14,8 +14,7 @@ import 'player_video.dart';
 
 bool playerVisible(AppLifecycleState? state) =>
     state == AppLifecycleState.resumed ||
-    state == AppLifecycleState.inactive ||
-
+    state == AppLifecycleState.inactive;
 
 Widget _video(PlaybackHandle handle) => PlayerVideo(
   key: ValueKey(handle.session.player),
