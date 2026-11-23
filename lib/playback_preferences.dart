@@ -105,7 +105,6 @@ class PlaybackPreferences {
     this.hideSystemBars = true,
     this.portraitStyleForWide = false,
     this.directPlay = false,
-    this.autoPictureInPicture = false,
     this.videoFit = VideoFit.auto,
     VideoFit? portraitVideoFit,
     VideoFit? landscapeVideoFit,
@@ -142,7 +141,6 @@ class PlaybackPreferences {
   final bool hideSystemBars;
   final bool portraitStyleForWide;
   final bool directPlay;
-  final bool autoPictureInPicture;
   /// Legacy shared value retained for older settings payloads.
   final VideoFit videoFit;
   final VideoFit portraitVideoFit;
@@ -181,7 +179,6 @@ class PlaybackPreferences {
     bool? hideSystemBars,
     bool? portraitStyleForWide,
     bool? directPlay,
-    bool? autoPictureInPicture,
     VideoFit? videoFit,
     VideoFit? portraitVideoFit,
     VideoFit? landscapeVideoFit,
@@ -213,7 +210,6 @@ class PlaybackPreferences {
     hideSystemBars: hideSystemBars ?? this.hideSystemBars,
     portraitStyleForWide: portraitStyleForWide ?? this.portraitStyleForWide,
     directPlay: directPlay ?? this.directPlay,
-    autoPictureInPicture: autoPictureInPicture ?? this.autoPictureInPicture,
     videoFit: videoFit ?? this.videoFit,
     portraitVideoFit: portraitVideoFit ?? this.portraitVideoFit,
     landscapeVideoFit: landscapeVideoFit ?? this.landscapeVideoFit,
@@ -247,7 +243,6 @@ class PlaybackPreferences {
     'hideSystemBars': hideSystemBars,
     'portraitStyleForWide': portraitStyleForWide,
     'directPlay': directPlay,
-    'autoPictureInPicture': autoPictureInPicture,
     'videoFit': videoFit.name,
     'portraitVideoFit': portraitVideoFit.name,
     'landscapeVideoFit': landscapeVideoFit.name,
@@ -311,7 +306,6 @@ class PlaybackPreferences {
       hideSystemBars: value['hideSystemBars'] as bool? ?? true,
       portraitStyleForWide: value['portraitStyleForWide'] as bool? ?? false,
       directPlay: value['directPlay'] as bool? ?? false,
-      autoPictureInPicture: value['autoPictureInPicture'] as bool? ?? false,
       videoFit: VideoFit.values.asNameMap()[value['videoFit']] ?? VideoFit.auto,
       portraitVideoFit:
           VideoFit.values.asNameMap()[value['portraitVideoFit']] ??
