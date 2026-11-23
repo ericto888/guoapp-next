@@ -1015,7 +1015,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
               const SizedBox(width: 4),
               if (session.danmakuSupported) _danmakuButton(context),
               if (widget.onMiniWindow case final onMiniWindow?)
-                _icon(Icons.picture_in_picture_alt_rounded, '小窗', onMiniWindow),
+                _icon(Icons.open_in_new_rounded, '小窗', onMiniWindow),
               _icon(
                 Icons.settings_rounded,
                 '播放设置',
