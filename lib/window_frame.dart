@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app_device.dart';
-import 'picture_in_picture.dart';
+import 'mini_window.dart';
 
 const _key = 'mainWindow';
 
@@ -33,7 +33,7 @@ class _WindowFrameKeeper with WindowListener {
   final SharedPreferences preferences;
 
   Future<void> _save() async {
-    if (PictureInPicture.instance.window) return;
+    if (MiniWindowController.instance.window) return;
     try {
       final frame = await AppDevice.channel.invokeMapMethod<String, num>(
         'windowFrame',
