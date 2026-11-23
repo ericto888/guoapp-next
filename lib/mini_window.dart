@@ -28,6 +28,8 @@ Size _miniSize(double ratio, double extent) =>
     ratio >= 1 ? Size(extent, extent / ratio) : Size(extent * ratio, extent);
 
 class MiniWindowController extends ChangeNotifier {
+  MiniWindowController._();
+
   static final instance = MiniWindowController._();
 
   bool _window = false;
