@@ -836,7 +836,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
         if (showMiniWindow)
           _icon(
             Icons.picture_in_picture_alt_rounded,
-            '画中画',
+            '小窗',
             widget.onMiniWindow,
           ),
         if (showCast)
