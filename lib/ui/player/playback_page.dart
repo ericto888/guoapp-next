@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -65,9 +64,6 @@ class _PlaybackPageState extends State<PlaybackPage> {
 
   bool _wideAutoRotationApplied = false;
 
-  bool get _television =>
-      AppScope.formFactorOf(context) == FormFactor.television;
-
   /// 竖持横片模式交给系统方向传感器：用户物理横持时直接切换到
   /// 自定义横屏真全屏页面，不再要求先点“全屏观看”。
   void _syncWideAutoRotation({bool? wide}) {
@@ -92,6 +88,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _wideVideo = _session.aspectKnown && _session.aspectRatio >= 1;
     _session.addListener(_changed);
     _padFullscreen.addListener(_padFullscreenChanged);
+    _miniWindow.addListener(_miniWindowChanged);
     _bind();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncWideAutoRotation();
@@ -101,6 +98,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
   @override
   void dispose() {
     _session.removeListener(_changed);
+    _miniWindow.removeListener(_miniWindowChanged);
     _pageScope.dispose();
     if (_wideAutoRotationApplied) {
       _wideAutoRotationApplied = false;
@@ -147,8 +145,10 @@ class _PlaybackPageState extends State<PlaybackPage> {
     final player = _session.player;
     if (identical(player, _bound)) return;
     _bound = player;
-    unawaited(_playing?.cancel());
+  }
 
+  void _miniWindowChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
